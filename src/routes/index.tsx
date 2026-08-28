@@ -25,9 +25,9 @@ import {
   useLeaderboard,
 } from "~/features/stamps/queries";
 import { toLeaderboardRows } from "~/features/stamps/types";
+import { STAMP_EMOJIS } from "~/lib/slack-rules";
 import { cn } from "~/lib/utils";
 import { getWindowDays, setWindowDays } from "~/lib/window-days";
-import { STAMP_EMOJIS } from "../../convex/slack";
 
 const WINDOWS = [7, 14, 30, 60, 90] as const;
 
@@ -73,7 +73,7 @@ function Home() {
             <img
               alt="StampHog mascot"
               className="size-8"
-              src="/superman-hog.png"
+              src="/super_beaver.png"
             />
             <h1 className="font-bold text-foreground text-lg tracking-tight">
               StampHog
@@ -84,7 +84,7 @@ function Home() {
             <a
               aria-label="View on GitHub"
               className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              href="https://github.com/PostHog/stamphog"
+              href="https://github.com/mijho/stamphog"
               rel="noopener noreferrer"
               target="_blank"
             >

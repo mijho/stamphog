@@ -9,6 +9,9 @@ node_modules
 .env*
 !.env.example
 
+# SQLite
+data/
+
 # Testing
 coverage
 

@@ -1,14 +1,17 @@
-import { internal } from "../_generated/api";
-import type { ActionCtx } from "../_generated/server";
 import {
   buildReactionDedupeKey,
   buildRequestDedupeKey,
   extractQualifyingReviewUrl,
-  fetchSlackMessageAtTimestamp,
-  fetchSlackUserSummary,
   getStampEmojiSet,
   normalizeEmoji,
-} from "../slack";
+} from "../../src/lib/slack-rules";
+import type { AppDb } from "../db";
+import {
+  ingestReactionStamp,
+  ingestRequestMessage,
+  removeReactionStamp,
+} from "../ingest";
+import { fetchSlackMessageAtTimestamp, fetchSlackUserSummary } from "./client";
 import type { SlackMessageEvent, SlackReactionEvent } from "./types";
 
 function toOccurredAtMs(eventTs: string | undefined) {
@@ -16,42 +19,40 @@ function toOccurredAtMs(eventTs: string | undefined) {
   return Number.isFinite(parsed) ? Math.floor(parsed * 1000) : undefined;
 }
 
+function ignored(reason: string, extra?: Record<string, unknown>) {
+  console.log("stamphog slack", { ignored: true, reason, ...extra });
+  return Response.json({
+    ok: true,
+    ignored: true,
+    reason,
+  });
+}
+
 export async function handleSlackMessageEvent(
-  ctx: ActionCtx,
+  db: AppDb,
   event: SlackMessageEvent,
   botToken: string
 ) {
   if (event.subtype) {
-    return Response.json({
-      ok: true,
-      ignored: true,
-      reason: "message_subtype",
-    });
+    return ignored("message_subtype", { subtype: event.subtype });
   }
 
   // Skip thread replies — only track base (top-level) channel messages
   if (event.thread_ts && event.thread_ts !== event.ts) {
-    return Response.json({
-      ok: true,
-      ignored: true,
-      reason: "thread_reply",
-    });
+    return ignored("thread_reply", { channelId: event.channel });
   }
 
   const requesterId = event.user;
   const channelId = event.channel;
   const messageTs = event.ts;
   if (!(requesterId && channelId && messageTs)) {
+    console.log("stamphog slack", { rejected: "missing message event fields" });
     return new Response("missing message event fields", { status: 400 });
   }
 
   const qualifyingUrl = extractQualifyingReviewUrl(event.text);
   if (!qualifyingUrl) {
-    return Response.json({
-      ok: true,
-      ignored: true,
-      reason: "missing_qualifying_review_url",
-    });
+    return ignored("missing_qualifying_review_url", { channelId });
   }
 
   const requester = await fetchSlackUserSummary({
@@ -59,7 +60,7 @@ export async function handleSlackMessageEvent(
     slackUserId: requesterId,
   });
 
-  const result = await ctx.runMutation(internal.stamps.ingestRequestMessage, {
+  const result = ingestRequestMessage(db, {
     requesterId,
     requesterDisplayName: requester.displayName,
     requesterImageUrl: requester.imageUrl,
@@ -70,27 +71,30 @@ export async function handleSlackMessageEvent(
     dedupeKey: buildRequestDedupeKey({ channelId, messageTs }),
   });
 
+  console.log("stamphog slack", {
+    handled: "message",
+    channelId,
+    prUrl: qualifyingUrl,
+    duplicateSkipped: result.duplicateSkipped,
+  });
   return Response.json({ ok: true, duplicateSkipped: result.duplicateSkipped });
 }
 
 export async function handleSlackReactionEvent(
-  ctx: ActionCtx,
+  db: AppDb,
   event: SlackReactionEvent,
   botToken: string
 ) {
   const normalizedReaction = normalizeEmoji(event.reaction ?? "");
   if (!getStampEmojiSet().has(normalizedReaction)) {
-    return Response.json({
-      ok: true,
-      ignored: true,
-      reason: "emoji_not_tracked",
-    });
+    return ignored("emoji_not_tracked", { reaction: normalizedReaction });
   }
 
   const giverId = event.user;
   const channelId = event.item?.channel;
   const messageTs = event.item?.ts;
   if (!(giverId && channelId && messageTs)) {
+    console.log("stamphog slack", { rejected: "missing reaction event fields" });
     return new Response("missing reaction event fields", { status: 400 });
   }
 
@@ -104,24 +108,20 @@ export async function handleSlackReactionEvent(
   // message timestamp doesn't match what we asked for, the reaction was on a
   // thread reply and we got the nearest base message instead — skip it.
   if (!message?.ts || message.ts !== messageTs) {
-    return Response.json({
-      ok: true,
-      ignored: true,
-      reason: "thread_reply",
-    });
+    return ignored("thread_reply", { channelId, reaction: normalizedReaction });
   }
 
   const requesterId = message.user;
   if (!requesterId) {
+    console.log("stamphog slack", { rejected: "could not resolve message author" });
     return new Response("could not resolve message author", { status: 400 });
   }
 
   const qualifyingUrl = extractQualifyingReviewUrl(message.text);
   if (!qualifyingUrl) {
-    return Response.json({
-      ok: true,
-      ignored: true,
-      reason: "missing_qualifying_review_url",
+    return ignored("missing_qualifying_review_url", {
+      channelId,
+      reaction: normalizedReaction,
     });
   }
 
@@ -130,7 +130,7 @@ export async function handleSlackReactionEvent(
     slackUserId: requesterId,
   });
 
-  await ctx.runMutation(internal.stamps.ingestRequestMessage, {
+  ingestRequestMessage(db, {
     requesterId,
     requesterDisplayName: requester.displayName,
     requesterImageUrl: requester.imageUrl,
@@ -150,7 +150,7 @@ export async function handleSlackReactionEvent(
   const source = `slack:reaction:${normalizedReaction}`;
 
   if (event.type === "reaction_removed") {
-    const result = await ctx.runMutation(internal.stamps.removeReactionStamp, {
+    const result = removeReactionStamp(db, {
       dedupeKey,
       giverId,
       requesterId,
@@ -159,6 +159,12 @@ export async function handleSlackReactionEvent(
       channelId,
     });
 
+    console.log("stamphog slack", {
+      handled: "reaction_removed",
+      channelId,
+      reaction: normalizedReaction,
+      removed: result.removed,
+    });
     return Response.json({
       ok: true,
       removed: result.removed,
@@ -171,7 +177,7 @@ export async function handleSlackReactionEvent(
     slackUserId: giverId,
   });
 
-  const result = await ctx.runMutation(internal.stamps.ingestReactionStamp, {
+  const result = ingestReactionStamp(db, {
     giverId,
     requesterId,
     giverDisplayName: giver.displayName,
@@ -186,5 +192,12 @@ export async function handleSlackReactionEvent(
     dedupeKey,
   });
 
+  console.log("stamphog slack", {
+    handled: "reaction_added",
+    channelId,
+    reaction: normalizedReaction,
+    prUrl: qualifyingUrl,
+    duplicateSkipped: result.duplicateSkipped,
+  });
   return Response.json({ ok: true, duplicateSkipped: result.duplicateSkipped });
 }

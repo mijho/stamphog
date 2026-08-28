@@ -40,12 +40,14 @@ export async function verifySlackWebhookSignature(
 ) {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) {
+    console.log("stamphog slack", { rejected: "missing SLACK_SIGNING_SECRET" });
     return new Response("missing SLACK_SIGNING_SECRET", { status: 500 });
   }
 
   const slackTimestamp = request.headers.get("x-slack-request-timestamp") ?? "";
   const slackSignature = request.headers.get("x-slack-signature") ?? "";
   if (!(slackTimestamp && slackSignature)) {
+    console.log("stamphog slack", { rejected: "missing slack signature headers" });
     return new Response("missing slack signature headers", { status: 401 });
   }
 
@@ -53,6 +55,7 @@ export async function verifySlackWebhookSignature(
     Date.now() / 1000 - Number(slackTimestamp)
   );
   if (!Number.isFinite(timestampAgeSeconds) || timestampAgeSeconds > 60 * 5) {
+    console.log("stamphog slack", { rejected: "stale slack request" });
     return new Response("stale slack request", { status: 401 });
   }
 
@@ -60,6 +63,7 @@ export async function verifySlackWebhookSignature(
   const expectedSignature = await signSlackPayload(signingSecret, payloadBase);
 
   if (!secureCompare(expectedSignature, slackSignature)) {
+    console.log("stamphog slack", { rejected: "invalid slack signature" });
     return new Response("invalid slack signature", { status: 401 });
   }
 

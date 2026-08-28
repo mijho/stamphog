@@ -1,23 +1,25 @@
-import { internal } from "../_generated/api";
-import type { ActionCtx } from "../_generated/server";
 import {
   buildReactionDedupeKey,
   buildRequestDedupeKey,
   extractQualifyingReviewUrl,
-  fetchSlackHistoryPage,
-  fetchSlackUserSummary,
   getStampEmojiSet,
   normalizeEmoji,
+} from "../../src/lib/slack-rules";
+import type { AppDb } from "../db";
+import { ingestReactionStamp, ingestRequestMessage } from "../ingest";
+import {
+  fetchSlackHistoryPage,
+  fetchSlackUserSummary,
   type SlackHistoryMessage,
   type SlackUserSummary,
-} from "../slack";
+} from "./client";
 
 const DEFAULT_MAX_MESSAGES = 5000;
 const MAX_BACKFILL_MESSAGES = 50_000;
 const BACKFILL_WINDOW_DAYS = 90;
 const PAGE_SIZE = 200;
 
-interface BackfillArgs {
+export interface BackfillArgs {
   channelId: string;
   oldestTs?: string;
   maxMessages?: number;
@@ -45,6 +47,14 @@ interface BackfillState {
   qualifyingUrlHosts: CountMap;
 }
 
+interface RuntimeContext {
+  db: AppDb;
+  channelId: string;
+  trackedStampEmojis: Set<string>;
+  state: BackfillState;
+  getUserSummary: (slackUserId: string) => Promise<SlackUserSummary>;
+}
+
 function createBackfillState(): BackfillState {
   return {
     scannedMessages: 0,
@@ -60,10 +70,10 @@ function createBackfillState(): BackfillState {
     skippedNoTrackedReactions: 0,
     messagesWithAnyReaction: 0,
     messagesWithTrackedReaction: 0,
-    allReactionNames: new Map<string, number>(),
-    trackedReactionNames: new Map<string, number>(),
-    untrackedReactionNames: new Map<string, number>(),
-    qualifyingUrlHosts: new Map<string, number>(),
+    allReactionNames: new Map(),
+    trackedReactionNames: new Map(),
+    untrackedReactionNames: new Map(),
+    qualifyingUrlHosts: new Map(),
   };
 }
 
@@ -103,13 +113,9 @@ function boundedMaxMessages(maxMessages: number | undefined) {
   );
 }
 
-function backfillCutoffTsSeconds() {
-  const cutoffMs = Date.now() - BACKFILL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return String(Math.floor(cutoffMs / 1000));
-}
-
 function effectiveOldestTs(userOldestTs: string | undefined) {
-  const cutoffTs = backfillCutoffTsSeconds();
+  const cutoffMs = Date.now() - BACKFILL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const cutoffTs = String(Math.floor(cutoffMs / 1000));
   if (!userOldestTs) {
     return cutoffTs;
   }
@@ -149,14 +155,6 @@ function buildSummary(args: {
   };
 }
 
-interface RuntimeContext {
-  ctx: ActionCtx;
-  channelId: string;
-  trackedStampEmojis: Set<string>;
-  state: BackfillState;
-  getUserSummary: (slackUserId: string) => Promise<SlackUserSummary>;
-}
-
 async function ingestRequestForMessage(
   runtime: RuntimeContext,
   message: SlackHistoryMessage,
@@ -165,22 +163,19 @@ async function ingestRequestForMessage(
   messageRef: string
 ) {
   const requester = await runtime.getUserSummary(requesterId);
-  const requestResult = await runtime.ctx.runMutation(
-    internal.stamps.ingestRequestMessage,
-    {
-      requesterId,
-      requesterDisplayName: requester.displayName,
-      requesterImageUrl: requester.imageUrl,
+  const requestResult = ingestRequestMessage(runtime.db, {
+    requesterId,
+    requesterDisplayName: requester.displayName,
+    requesterImageUrl: requester.imageUrl,
+    channelId: runtime.channelId,
+    messageRef,
+    occurredAt: toOccurredAtMs(message.ts),
+    prUrl: qualifyingUrl,
+    dedupeKey: buildRequestDedupeKey({
       channelId: runtime.channelId,
-      messageRef,
-      occurredAt: toOccurredAtMs(message.ts),
-      prUrl: qualifyingUrl,
-      dedupeKey: buildRequestDedupeKey({
-        channelId: runtime.channelId,
-        messageTs: messageRef,
-      }),
-    }
-  );
+      messageTs: messageRef,
+    }),
+  });
 
   if (requestResult.duplicateSkipped) {
     runtime.state.duplicateRequests += 1;
@@ -193,7 +188,6 @@ async function ingestTrackedReactionUsers(args: {
   runtime: RuntimeContext;
   requesterId: string;
   messageRef: string;
-  message: SlackHistoryMessage;
   occurredAt: number | undefined;
   reactionName: string;
   qualifyingUrl: string;
@@ -210,30 +204,25 @@ async function ingestTrackedReactionUsers(args: {
       args.runtime.getUserSummary(args.requesterId),
     ]);
 
-    const dedupeKey = buildReactionDedupeKey({
-      channelId: args.runtime.channelId,
-      messageTs: args.messageRef,
+    const result = ingestReactionStamp(args.runtime.db, {
+      giverId,
+      requesterId: args.requesterId,
+      giverDisplayName: giver.displayName,
+      requesterDisplayName: requesterSummary.displayName,
+      giverImageUrl: giver.imageUrl,
+      requesterImageUrl: requesterSummary.imageUrl,
       reaction: args.reactionName,
-      giverSlackId: giverId,
-    });
-
-    const result = await args.runtime.ctx.runMutation(
-      internal.stamps.ingestReactionStamp,
-      {
-        giverId,
-        requesterId: args.requesterId,
-        giverDisplayName: giver.displayName,
-        requesterDisplayName: requesterSummary.displayName,
-        giverImageUrl: giver.imageUrl,
-        requesterImageUrl: requesterSummary.imageUrl,
-        reaction: args.reactionName,
-        source: `slack:reaction:${args.reactionName}`,
-        occurredAt: args.occurredAt,
+      source: `slack:reaction:${args.reactionName}`,
+      occurredAt: args.occurredAt,
+      channelId: args.runtime.channelId,
+      prUrl: args.qualifyingUrl,
+      dedupeKey: buildReactionDedupeKey({
         channelId: args.runtime.channelId,
-        prUrl: args.qualifyingUrl,
-        dedupeKey,
-      }
-    );
+        messageTs: args.messageRef,
+        reaction: args.reactionName,
+        giverSlackId: giverId,
+      }),
+    });
 
     if (result.duplicateSkipped) {
       args.runtime.state.duplicateEvents += 1;
@@ -276,7 +265,6 @@ async function processMessageReactions(args: {
       runtime: args.runtime,
       requesterId: args.requesterId,
       messageRef: args.messageRef,
-      message: args.message,
       occurredAt,
       reactionName,
       qualifyingUrl: args.qualifyingUrl,
@@ -352,7 +340,7 @@ async function fetchHistoryPageOrThrow(args: {
   return page;
 }
 
-export async function runSlackBackfill(ctx: ActionCtx, args: BackfillArgs) {
+export async function runSlackBackfill(db: AppDb, args: BackfillArgs) {
   const botToken = process.env.SLACK_BOT_TOKEN;
   if (!botToken) {
     throw new Error("missing SLACK_BOT_TOKEN");
@@ -376,7 +364,7 @@ export async function runSlackBackfill(ctx: ActionCtx, args: BackfillArgs) {
   };
 
   const runtime: RuntimeContext = {
-    ctx,
+    db,
     channelId: args.channelId,
     trackedStampEmojis,
     state,
@@ -415,13 +403,11 @@ export async function runSlackBackfill(ctx: ActionCtx, args: BackfillArgs) {
     trackedStampEmojis,
   });
 
-  const requestedOldestTs = args.oldestTs ?? null;
-  const appliedOldestTs = oldestTs;
   console.log("stamphog backfill summary", JSON.stringify(summary));
   return {
     ...summary,
-    requestedOldestTs,
-    appliedOldestTs,
+    requestedOldestTs: args.oldestTs ?? null,
+    appliedOldestTs: oldestTs,
     backfillWindowDays: BACKFILL_WINDOW_DAYS,
   };
 }

@@ -7,51 +7,60 @@
   "keywords": [],
   "homepage": "https://posthog.com",
   "bugs": {
-    "url": "https://github.com/PostHog/stamphog/issues"
+    "url": "https://github.com/mijho/stamphog/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/PostHog/stamphog"
+    "url": "https://github.com/mijho/stamphog"
   },
   "license": "MIT",
   "author": {
     "name": "PostHog"
   },
   "scripts": {
-    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:convex\"",
-    "dev:web": "vite dev",
-    "dev:convex": "convex dev",
+    "dev": "concurrently -n web,api -c cyan,magenta \"pnpm dev:web\" \"pnpm dev:api\"",
+    "dev:web": "PORT=5173 vite dev --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:api": "tsx watch server/index.ts",
     "build": "vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
     "check": "ultracite check",
-    "fix": "ultracite fix --unsafe"
+    "fix": "ultracite fix --unsafe",
+    "seed": "tsx server/cli/seed.ts",
+    "db:reset": "tsx server/cli/reset.ts",
+    "backfill": "tsx server/cli/backfill.ts",
+    "test": "tsx --test server/ingest.test.ts"
   },
   "dependencies": {
-    "@convex-dev/react-query": "0.1.0",
     "@faker-js/faker": "^10.3.0",
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/geist-mono": "^5.2.7",
     "@fontsource-variable/ibm-plex-sans": "^5.2.8",
+    "@hono/node-server": "^2.1.1",
+    "@slack/socket-mode": "^3.0.0",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-router": "^1.159.10",
     "@tanstack/react-router-ssr-query": "^1.159.10",
     "@tanstack/react-start": "^1.159.11",
+    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "convex": "^1.31.7",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.13.5",
     "lucide-react": "^0.564.0",
     "motion": "^12.34.0",
     "posthog-js": "^1.347.2",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "undici": "^7.22.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.15",
     "@ras-sh/typescript-config": "^0.0.3",
     "@tailwindcss/vite": "^4.1.18",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^25.2.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -61,6 +70,7 @@
     "nitro": "3.0.1-alpha.2",
     "shadcn": "^3.8.4",
     "tailwindcss": "^4.1.18",
+    "tsx": "^4.23.12",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5.9.3",
     "ultracite": "7.2.0",

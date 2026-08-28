@@ -6,6 +6,12 @@ import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+    strictPort: true,
+    allowedHosts: ["millions-lightbox-chamber-matrix.trycloudflare.com"],
+  },
   plugins: [
     tsConfigPaths(),
     tanstackStart(),
