@@ -252,9 +252,9 @@ Plan:
 4. **Service env file** `/etc/stamphog.env` (root-owned `0600`, never in the
    repo): `PORT=3000`, `API_PORT=8787`,
    `VITE_API_URL=http://127.0.0.1:8787`, `DATABASE_PATH=/var/lib/stamphog/
-   stamphog.db`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` (or the exe.dev
-   Slack Bot integration host — see decisions), and read-auth settings per
-   the UI-privacy decision below.
+   stamphog.db`, `SLACK_API_BASE=https://<integration>.int.exe.xyz`,
+   `SLACK_SIGNING_SECRET` (on-VM), and `READ_AUTH_ALLOW_ANONYMOUS=true`
+   (public UI).
 5. **Slack app (external, not in repo).** Point HTTP Event Subscriptions at
    `https://stampy.exe.xyz/slack/stamps`; grant `reactions:read`,
    `channels:history`, `users:read`, `chat:write`; set the signing secret.
@@ -265,29 +265,56 @@ Plan:
    protected surfaces while Slack still reaches the webhook; confirm SQLite
    survives restart and a new release; one rollback and one restore rehearsal.
 
-#### Decisions to confirm for the stampy.exe.xyz pilot
+#### Decisions for the stampy.exe.xyz pilot (resolved)
 
-- **UI/read API visibility.** Plan Gate B says protect the dashboard with
-  exe.dev identity + email allow-list. But a stamp leaderboard is playful and
-  may be intended to be publicly viewable. Options: (a) public leaderboard
-  (`READ_AUTH_ALLOW_ANONYMOUS=true`, default) — simplest pilot; (b) exe.dev
-  identity-protected (`READ_AUTH_ALLOW_ANONYMOUS=false` + the header exe.dev
-  injects for authenticated proxy users and an email allow-list). The exact
-  identity header name exe.dev sets must be confirmed during implementation.
-- **Slack credential handling.** (a) Plain VM env secrets
-  (`SLACK_BOT_TOKEN` + `SLACK_SIGNING_SECRET` in `/etc/stamphog.env`) — simple,
-  secrets stay out of the repo; (b) exe.dev **Slack Bot integration** so the
-  `xoxb-`/`xapp-` tokens live off-VM and the VM calls
-  `https://<integration>.int.exe.xyz/api/...` — requires a small change to
-  route the Slack Web API base (`SLACK_API_BASE`) in `client.ts`. The webhook
-  still needs the signing secret unless we later adopt Socket Mode (Phase 0
-  removed Socket Mode; HTTP stays the supported transport).
+- **UI/read API visibility — PUBLIC.** The staging leaderboard and recent-events
+  feed are publicly viewable (`READ_AUTH_ALLOW_ANONYMOUS=true`, the default).
+  No exe.dev identity-header wiring is needed for the UI. Slack's
+  `POST /slack/stamps` is public by design because it sits outside `/api/*`, so
+  the read-auth middleware never gates it.
+- **Slack credential handling — exe.dev Slack Bot integration.** The
+  `xoxb-`/`xapp-` tokens live off-VM; the VM reaches Slack through the
+  integration host `https://<integration>.int.exe.xyz/api/...`. The webhook
+  stays HTTP, so `SLACK_SIGNING_SECRET` still lives on the VM to verify
+  requests (Socket Mode is deferred — Phase 0 removed it and HTTP is the
+  supported transport). `client.ts` must consult a `SLACK_API_BASE` env
+  (default `https://slack.com/api`) for history/backfill/user calls.
+
+#### Implementation checklist (Phase 2 — not yet started)
+
+1. `server/slack/client.ts`: honor a `SLACK_API_BASE` env (default
+   `https://slack.com/api`) as the base for every `apiCall` (history, backfill,
+   user lookups). Add `slackApiBase` to `serverEnv`.
+2. `server/env.ts`: parse `SLACK_API_BASE` (optional HTTP(S) URL, default
+   `https://slack.com/api`).
+3. `server/index.ts`: bind the API to `127.0.0.1` only (internal process);
+   keep `POST /slack/stamps` unauthenticated.
+4. `vite.config.ts`: add `routeRules["/slack/**"] = { proxy:
+   "${VITE_API_URL}/slack/**" }` so the public web port forwards the Slack
+   webhook to the internal API.
+5. Add a `/health` route to the web server (or health-check `/`) for the
+   systemd/release healthcheck.
+6. Add `deploy/exe/` assets: `provision.sh`, `release.sh`, `rollback.sh`,
+   `backup.sh`, `restore.sh`, `web.service`, `api.service`, and a
+   `/etc/stamphog.env` template. The env file sets `PORT=3000`,
+   `API_PORT=8787`, `VITE_API_URL=http://127.0.0.1:8787`,
+   `DATABASE_PATH=/var/lib/stamphog/stamphog.db`,
+   `SLACK_API_BASE=https://<integration>.int.exe.xyz`, `SLACK_SIGNING_SECRET`
+   (on-VM), and leaves `READ_AUTH_ALLOW_ANONYMOUS` at its public default.
+7. exe.dev: `ssh exe.dev domain add stampy stampy.exe.xyz` (DNS CNAME
+   `stampy.exe.xyz → stampy.exe.xyz`) and `ssh exe.dev share set-public
+   stampy`; select `PORT` (3000) as the public port.
+8. Slack app (external): Event Subscriptions → `https://stampy.exe.xyz/slack/stamps`;
+   scopes `reactions:read`, `channels:history`, `users:read`, `chat:write`;
+   install into the workspace and invite the bot to the channel.
+9. Run `bun run backfill` once history import is routed through `SLACK_API_BASE`.
+10. Execute the Gate B validation exercise listed below.
 
 ### Deployment validation
 
 - Install the staging Slack app with HTTP Event Subscriptions pointed at the stable exe.dev webhook URL.
 - Exercise URL verification, qualifying message, reaction add, duplicate delivery, removal, removal retry, process restart with a queued event, and backfill.
-- Confirm that unauthenticated users cannot read the UI or `/api/*` and that Slack can still reach the webhook.
+- Confirm that the public UI loads for anonymous visitors and that Slack can still reach the webhook.
 - Confirm SQLite data survives application restarts and a new release.
 - Perform one deploy rollback and one database restore rehearsal.
 
