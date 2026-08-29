@@ -38,9 +38,9 @@ async function signSlackPayload(secret: string, payload: string) {
 
 export async function verifySlackWebhookSignature(
   request: Request,
-  rawBody: string
+  rawBody: string,
+  signingSecret = serverEnv.slackSigningSecret
 ) {
-  const signingSecret = serverEnv.slackSigningSecret;
   if (!signingSecret) {
     console.log("stamphog slack", { rejected: "missing SLACK_SIGNING_SECRET" });
     return new Response("missing SLACK_SIGNING_SECRET", { status: 500 });

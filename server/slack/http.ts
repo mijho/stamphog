@@ -8,13 +8,29 @@ import type {
   SlackReactionEvent,
 } from "./types";
 
-export async function handleSlackStamps(request: Request) {
+interface SlackHttpOptions {
+  signingSecret?: string;
+}
+
+export async function handleSlackStamps(
+  request: Request,
+  options: SlackHttpOptions = {}
+) {
   const rawBody = await request.text();
   console.log("stamphog slack", {
     received: true,
     bytes: rawBody.length,
     hasSignature: Boolean(request.headers.get("x-slack-signature")),
   });
+
+  const signatureError = await verifySlackWebhookSignature(
+    request,
+    rawBody,
+    options.signingSecret
+  );
+  if (signatureError) {
+    return signatureError;
+  }
 
   let payload: unknown;
   try {
@@ -27,20 +43,14 @@ export async function handleSlackStamps(request: Request) {
   const envelope = payload as SlackEventEnvelope;
 
   if (envelope.type === "url_verification" && envelope.challenge) {
-    const signatureError = await verifySlackWebhookSignature(request, rawBody);
     console.log("stamphog slack", {
       handled: "url_verification",
-      signatureOk: signatureError === null,
+      signatureOk: true,
     });
     return new Response(envelope.challenge, {
       status: 200,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
-  }
-
-  const signatureError = await verifySlackWebhookSignature(request, rawBody);
-  if (signatureError) {
-    return signatureError;
   }
 
   if (envelope.type !== "event_callback" || !envelope.event) {
