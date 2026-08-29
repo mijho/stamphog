@@ -1,3 +1,4 @@
+import { TIMESTAMP_SOURCES } from "../../src/lib/event-time";
 import {
   buildReactionDedupeKey,
   buildRequestDedupeKey,
@@ -202,6 +203,7 @@ export async function handleSlackReactionEvent(
     reaction: normalizedReaction,
     source,
     occurredAt: toOccurredAtMs(event.event_ts),
+    timestampSource: TIMESTAMP_SOURCES.slackEvent,
     channelId,
     prUrl: qualifyingUrl,
     dedupeKey,

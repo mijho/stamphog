@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { TIMESTAMP_SOURCES } from "../src/lib/event-time";
 import { type AppDb, createDb } from "./db";
 import {
   type IngestReactionArgs,
@@ -105,4 +106,40 @@ test("reaction remove does not delete stamps from another message", () => {
   expect(removed.removed).toBe(0);
   expect(removed.strategy).toBe("not_found");
   expect(getLeaderboard(db, {}).totals.stamps).toBe(2);
+});
+
+test("live stamps store slack event time separately from ingest time", () => {
+  const db = createDb(":memory:");
+  ingestSampleRequest(db);
+  ingestSampleStamp(db, {
+    occurredAt: 1_700_000_000_000,
+    ingestedAt: 1_700_000_100_000,
+    timestampSource: TIMESTAMP_SOURCES.slackEvent,
+  });
+
+  const stamp = getRecentEvents(db, {}).find((event) => event.type === "stamp");
+  expect(stamp).toMatchObject({
+    type: "stamp",
+    occurredAt: 1_700_000_000_000,
+    timestampSource: TIMESTAMP_SOURCES.slackEvent,
+    ingestedAt: 1_700_000_100_000,
+  });
+});
+
+test("backfilled stamps disclose message-time approximation", () => {
+  const db = createDb(":memory:");
+  ingestSampleRequest(db);
+  ingestSampleStamp(db, {
+    occurredAt: 1_699_000_000_000,
+    ingestedAt: 1_700_000_100_000,
+    timestampSource: TIMESTAMP_SOURCES.messageTimeApproximation,
+  });
+
+  const stamp = getRecentEvents(db, {}).find((event) => event.type === "stamp");
+  expect(stamp).toMatchObject({
+    type: "stamp",
+    occurredAt: 1_699_000_000_000,
+    timestampSource: TIMESTAMP_SOURCES.messageTimeApproximation,
+    ingestedAt: 1_700_000_100_000,
+  });
 });

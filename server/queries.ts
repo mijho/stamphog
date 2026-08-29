@@ -1,4 +1,5 @@
 import { desc, gte } from "drizzle-orm";
+import { TIMESTAMP_SOURCES, type TimestampSource } from "../src/lib/event-time";
 import type { AppDb } from "./db";
 import { actors, requests, stampEvents } from "./schema";
 
@@ -46,6 +47,8 @@ export interface StampActivity {
   _creationTime: number;
   type: "stamp";
   occurredAt: number;
+  timestampSource: TimestampSource;
+  ingestedAt: number;
   prUrl?: string;
   giverId: string;
   giverDisplayName: string;
@@ -103,6 +106,13 @@ function resolveActorProfile(
   actorId: string
 ): ActorProfile {
   return actorMap.get(actorId) ?? { displayName: actorId };
+}
+
+function asTimestampSource(value: string): TimestampSource {
+  if (value === TIMESTAMP_SOURCES.messageTimeApproximation) {
+    return TIMESTAMP_SOURCES.messageTimeApproximation;
+  }
+  return TIMESTAMP_SOURCES.slackEvent;
 }
 
 export function getLeaderboard(
@@ -216,6 +226,8 @@ export function getRecentEvents(
       _creationTime: event.createdAt,
       type: "stamp",
       occurredAt: event.occurredAt,
+      timestampSource: asTimestampSource(event.timestampSource),
+      ingestedAt: event.ingestedAt,
       prUrl: event.prUrl ?? undefined,
       giverId: event.giverId,
       giverDisplayName: giver.displayName,

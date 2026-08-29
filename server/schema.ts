@@ -56,6 +56,8 @@ export const stampEvents = sqliteTable(
     requesterId: text("requester_id").notNull(),
     stampCount: integer("stamp_count").notNull(),
     occurredAt: integer("occurred_at").notNull(),
+    timestampSource: text("timestamp_source").notNull().default("slack_event"),
+    ingestedAt: integer("ingested_at").notNull(),
     source: text("source").notNull(),
     channelId: text("channel_id"),
     prUrl: text("pr_url"),
