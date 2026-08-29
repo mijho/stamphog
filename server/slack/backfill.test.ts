@@ -175,3 +175,51 @@ test("resumes from a persisted cursor after an interrupted run", async () => {
   expect(completedRun?.scannedMessages).toBe(200);
   expect(summary.createdRequests).toBe(200);
 });
+
+test("re-running a completed backfill resets state before scanning", async () => {
+  const db = createDb(":memory:");
+  const completedStartedAt = 1_700_000_000_000;
+  const firstDeps = makeDeps({
+    now: () => completedStartedAt,
+    fetchPage: async () => page([message("1700000001.000")]),
+  });
+  await runSlackBackfill(db, { channelId: "C1" }, firstDeps);
+  const completed = db
+    .select()
+    .from(backfillRuns)
+    .where(eq(backfillRuns.channelId, "C1"))
+    .get();
+  expect(completed?.status).toBe("completed");
+  expect(completed?.scannedMessages).toBe(1);
+
+  let observedBeforeCrash: Record<string, unknown> = {};
+  const rerunDeps = makeDeps({
+    now: () => completedStartedAt + 100_000,
+    fetchPage: async () => {
+      const midRows = db
+        .select()
+        .from(backfillRuns)
+        .where(eq(backfillRuns.channelId, "C1"))
+        .all() as Array<{
+        status: string;
+        scannedMessages: number;
+        startedAt: number;
+      }>;
+      const mid = midRows[0];
+      observedBeforeCrash = {
+        status: mid?.status,
+        scannedMessages: mid?.scannedMessages,
+        startedAt: mid?.startedAt,
+      };
+      throw new Error("boom before first page");
+    },
+  });
+
+  await expect(
+    runSlackBackfill(db, { channelId: "C1", oldestTs: "100.000" }, rerunDeps)
+  ).rejects.toThrow("boom before first page");
+
+  expect(observedBeforeCrash.status).toBe("running");
+  expect(observedBeforeCrash.scannedMessages).toBe(0);
+  expect(observedBeforeCrash.startedAt).toBe(completedStartedAt + 100_000);
+});
