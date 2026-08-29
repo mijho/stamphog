@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { TIMESTAMP_SOURCES, type TimestampSource } from "../src/lib/event-time";
 import type { AppDb } from "./db";
 import { actors, requests, stampEvents } from "./schema";
 
@@ -24,6 +25,8 @@ export interface IngestReactionArgs {
   reaction: string;
   source?: string;
   occurredAt?: number;
+  timestampSource?: TimestampSource;
+  ingestedAt?: number;
   channelId: string;
   prUrl?: string;
   dedupeKey: string;
@@ -130,18 +133,21 @@ export function ingestReactionStamp(db: AppDb, args: IngestReactionArgs) {
   }
 
   const eventId = randomUUID();
+  const ingestedAt = args.ingestedAt ?? Date.now();
   db.insert(stampEvents)
     .values({
       id: eventId,
       giverId: args.giverId,
       requesterId: args.requesterId,
       stampCount: 1,
-      occurredAt: args.occurredAt ?? Date.now(),
+      occurredAt: args.occurredAt ?? ingestedAt,
+      timestampSource: args.timestampSource ?? TIMESTAMP_SOURCES.slackEvent,
+      ingestedAt,
       source: args.source ?? `stamp:${args.reaction}`,
       channelId: args.channelId,
       prUrl: args.prUrl,
       dedupeKey: args.dedupeKey,
-      createdAt: Date.now(),
+      createdAt: ingestedAt,
     })
     .run();
 

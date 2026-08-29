@@ -1,3 +1,4 @@
+import { TIMESTAMP_SOURCES } from "../../src/lib/event-time";
 import {
   buildReactionDedupeKey,
   buildRequestDedupeKey,
@@ -216,6 +217,7 @@ async function ingestTrackedReactionUsers(args: {
       reaction: args.reactionName,
       source: `slack:reaction:${args.reactionName}`,
       occurredAt: args.occurredAt,
+      timestampSource: TIMESTAMP_SOURCES.messageTimeApproximation,
       channelId: args.runtime.channelId,
       prUrl: args.qualifyingUrl,
       dedupeKey: buildReactionDedupeKey({

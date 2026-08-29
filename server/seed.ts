@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { faker } from "@faker-js/faker";
 import { like, or } from "drizzle-orm";
+import { TIMESTAMP_SOURCES } from "../src/lib/event-time";
 import type { AppDb } from "./db";
 import { actors, requests, stampEvents } from "./schema";
 
@@ -147,6 +148,8 @@ function createFixtureStampEvents(
         requesterId: args.requesterId,
         stampCount: 1,
         occurredAt: args.occurredAt + stampIndex * 60_000,
+        timestampSource: TIMESTAMP_SOURCES.slackEvent,
+        ingestedAt: args.occurredAt + stampIndex * 60_000,
         source: `fixture:${reaction}`,
         channelId: args.channelId,
         prUrl: args.prUrl,

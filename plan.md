@@ -452,7 +452,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 - [x] Add background processing, retries, restart recovery, and failed-job inspection.
 - [x] Make repeated reaction removal an exact no-op without cross-message deletion.
 - [x] Ignore self-stamps consistently in live ingestion and backfill.
-- [ ] Store `occurredAt`, `timestampSource`, and `ingestedAt` for historical events.
+- [x] Store `occurredAt`, `timestampSource`, and `ingestedAt` for historical events.
 - [ ] Validate GitHub PR and Graphite review paths rather than hostname alone.
 - [ ] Confirm and document the 20 tracked emoji.
 - [ ] Keep zero-stamp users out of the requester leaderboard and correct the README.

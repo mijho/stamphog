@@ -4,6 +4,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { TIMESTAMP_SOURCES } from "~/lib/event-time";
 import { useRecentStampEvents } from "../queries";
 import { Avatar } from "./avatar";
 
@@ -96,9 +97,12 @@ export function RecentEventsList() {
                   <TooltipContent>{prUrl}</TooltipContent>
                 </Tooltip>
               )}
-              <span className="font-mono text-[11px] text-muted-foreground/50 tabular-nums">
-                {timeAgo(ev.occurredAt)}
-              </span>
+              <EventTime
+                occurredAt={ev.occurredAt}
+                timestampSource={
+                  ev.type === "stamp" ? ev.timestampSource : undefined
+                }
+              />
             </div>
           </div>
         );
@@ -148,6 +152,37 @@ function StampEvent({
         </span>
       </p>
     </>
+  );
+}
+
+function EventTime({
+  occurredAt,
+  timestampSource,
+}: {
+  occurredAt: number;
+  timestampSource?: string;
+}) {
+  const label = timeAgo(occurredAt);
+  if (timestampSource !== TIMESTAMP_SOURCES.messageTimeApproximation) {
+    return (
+      <span className="font-mono text-[11px] text-muted-foreground/50 tabular-nums">
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="font-mono text-[11px] text-muted-foreground/50 tabular-nums">
+          ~{label}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        Approximate time from the PR message. Backfill has no reaction
+        timestamp.
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

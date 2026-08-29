@@ -15,6 +15,13 @@
       "when": 1788013350109,
       "tag": "0001_event_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788023495103,
+      "tag": "0002_stamp_event_timestamps",
+      "breakpoints": true
     }
   ]
 }
