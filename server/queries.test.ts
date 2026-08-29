@@ -62,7 +62,7 @@ test("leaderboard windowDays excludes requests before the window", () => {
   expect(unfiltered.totals.requests).toBe(2);
 });
 
-test("recent events respect the leaderboard query window", () => {
+test("recent events respect the query window server-side", () => {
   const db = createDb(":memory:");
   const now = Date.now();
   seedStamp(db, now, "recent");
@@ -71,7 +71,7 @@ test("recent events respect the leaderboard query window", () => {
   const unfiltered = getRecentEvents(db, {});
   expect(unfiltered.some((event) => event.type === "request")).toBe(true);
 
-  const filtered = recentEventsInWindow(db, 30);
+  const filtered = getRecentEvents(db, { windowDays: 30 });
   expect(filtered.every((event) => event.occurredAt >= now - 31 * DAY_MS)).toBe(
     true
   );
@@ -89,12 +89,6 @@ test("recent events are capped by the requested limit and ordered newest-first",
   expect(limited).toHaveLength(2);
   expect(limited[0]?.occurredAt).toBeGreaterThan(limited[1]?.occurredAt ?? 0);
 });
-
-function recentEventsInWindow(db: AppDb, windowDays: number) {
-  const since = Date.now() - windowDays * DAY_MS;
-  const events = getRecentEvents(db, {});
-  return events.filter((event) => event.occurredAt >= since);
-}
 
 test("unknown_legacy timestamp source is preserved (not coerced to slack_event)", () => {
   const db = createDb(":memory:");

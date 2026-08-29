@@ -34,9 +34,12 @@ app.get("/api/leaderboard", (c) => {
 app.get("/api/events", (c) => {
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Number(limitRaw) : undefined;
+  const windowDaysRaw = c.req.query("windowDays");
+  const windowDays = windowDaysRaw ? Number(windowDaysRaw) : undefined;
   return c.json(
     getRecentEvents(getDb(), {
       limit: Number.isFinite(limit) ? limit : undefined,
+      windowDays: Number.isFinite(windowDays) ? windowDays : undefined,
     })
   );
 });
