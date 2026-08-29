@@ -156,11 +156,6 @@ export async function handleSlackReactionEvent(
   if (event.type === "reaction_removed") {
     const result = removeReactionStamp(db, {
       dedupeKey,
-      giverId,
-      requesterId,
-      reaction: normalizedReaction,
-      source,
-      channelId,
     });
 
     console.log("stamphog slack", {

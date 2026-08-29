@@ -76,33 +76,33 @@ test("reaction remove deletes by dedupe key", () => {
 
   const removed = removeReactionStamp(db, {
     dedupeKey: "slack:reaction:C1:111.001:white_check_mark:U_GIVER",
-    giverId: "U_GIVER",
-    requesterId: "U_REQ",
-    reaction: "white_check_mark",
-    source: "slack:reaction:white_check_mark",
-    channelId: "C1",
   });
 
   expect(removed.removed).toBe(1);
   expect(removed.strategy).toBe("by_dedupe_key");
   expect(getLeaderboard(db, {}).totals.stamps).toBe(0);
+
+  const repeated = removeReactionStamp(db, {
+    dedupeKey: "slack:reaction:C1:111.001:white_check_mark:U_GIVER",
+  });
+  expect(repeated.removed).toBe(0);
+  expect(repeated.strategy).toBe("not_found");
+  expect(getLeaderboard(db, {}).totals.stamps).toBe(0);
 });
 
-test("reaction remove falls back when dedupe key is missing", () => {
+test("reaction remove does not delete stamps from another message", () => {
   const db = createDb(":memory:");
   ingestSampleRequest(db);
   ingestSampleStamp(db);
+  ingestSampleStamp(db, {
+    dedupeKey: "slack:reaction:C1:222.002:white_check_mark:U_GIVER",
+  });
 
   const removed = removeReactionStamp(db, {
     dedupeKey: "slack:reaction:missing",
-    giverId: "U_GIVER",
-    requesterId: "U_REQ",
-    reaction: "white_check_mark",
-    source: "slack:reaction:white_check_mark",
-    channelId: "C1",
   });
 
-  expect(removed.removed).toBe(1);
-  expect(removed.strategy).toBe("fallback_scan");
-  expect(getLeaderboard(db, {}).totals.stamps).toBe(0);
+  expect(removed.removed).toBe(0);
+  expect(removed.strategy).toBe("not_found");
+  expect(getLeaderboard(db, {}).totals.stamps).toBe(2);
 });
