@@ -77,3 +77,25 @@ test("read auth does not protect the Slack webhook", async () => {
   const res = await app.request("/slack/stamps");
   expect(res.status).toBe(200);
 });
+
+test("multi-identity allowlist rejects the full comma-joined header", async () => {
+  const app = buildApp({
+    identityHeader: "x-auth-request-user",
+    allowedIdentities: ["alice@example.com", "bob@example.com"],
+  });
+  const res = await app.request("/api/leaderboard", {
+    headers: { "x-auth-request-user": "alice@example.com,bob@example.com" },
+  });
+  expect(res.status).toBe(403);
+});
+
+test("multi-identity allowlist accepts a single member as the header", async () => {
+  const app = buildApp({
+    identityHeader: "x-auth-request-user",
+    allowedIdentities: ["alice@example.com", "bob@example.com"],
+  });
+  const res = await app.request("/api/leaderboard", {
+    headers: { "x-auth-request-user": "bob@example.com" },
+  });
+  expect(res.status).toBe(200);
+});
