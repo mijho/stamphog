@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { type AppDb, createDb } from "./db";
 import { ingestReactionStamp, ingestRequestMessage } from "./ingest";
 import { getLeaderboard, getRecentEvents } from "./queries";
+import { stampEvents } from "./schema";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -93,3 +95,19 @@ function recentEventsInWindow(db: AppDb, windowDays: number) {
   const events = getRecentEvents(db, {});
   return events.filter((event) => event.occurredAt >= since);
 }
+
+test("unknown_legacy timestamp source is preserved (not coerced to slack_event)", () => {
+  const db = createDb(":memory:");
+  const now = Date.now();
+  const stamp = seedStamp(db, now, "legacy");
+  db.update(stampEvents)
+    .set({ timestampSource: "unknown_legacy" })
+    .where(eq(stampEvents.id, stamp.eventId))
+    .run();
+
+  const events = getRecentEvents(db, {});
+  const legacy = events
+    .filter((event) => event.type === "stamp")
+    .find((event) => event._id === stamp.eventId);
+  expect(legacy?.timestampSource).toBe("unknown_legacy");
+});

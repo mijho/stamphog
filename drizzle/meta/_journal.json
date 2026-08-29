@@ -29,6 +29,13 @@
       "when": 1788027078449,
       "tag": "0003_backfill_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788030000000,
+      "tag": "0004_legacy_timestamp_source",
+      "breakpoints": true
     }
   ]
 }
