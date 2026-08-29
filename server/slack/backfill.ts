@@ -401,6 +401,40 @@ function persistRun(db: AppDb, run: BackfillRunRecord, cursor?: string) {
     .run();
 }
 
+function resetRun(db: AppDb, run: BackfillRunRecord) {
+  const now = Date.now();
+  const zeroedScalars = {} as Record<string, unknown>;
+  for (const key of SCALAR_KEYS) {
+    zeroedScalars[key] = 0;
+  }
+  db.insert(backfillRunsTable)
+    .values({
+      channelId: run.channelId,
+      status: "running",
+      oldestTs: run.oldestTs,
+      cursor: null,
+      startedAt: run.startedAt,
+      updatedAt: now,
+      completedAt: null,
+      lastError: null,
+      ...zeroedScalars,
+    })
+    .onConflictDoUpdate({
+      target: backfillRunsTable.channelId,
+      set: {
+        status: "running",
+        oldestTs: run.oldestTs,
+        startedAt: run.startedAt,
+        cursor: null,
+        updatedAt: now,
+        completedAt: null,
+        lastError: null,
+        ...zeroedScalars,
+      },
+    })
+    .run();
+}
+
 function completeRun(db: AppDb, run: BackfillRunRecord) {
   const now = Date.now();
   const scalarValues = {} as Record<string, unknown>;
@@ -478,12 +512,14 @@ export async function runSlackBackfill(
   const run: BackfillRunRecord = {
     channelId: args.channelId,
     oldestTs,
-    startedAt: existingRun?.startedAt ?? deps.now(),
+    startedAt: resuming ? (existingRun?.startedAt ?? deps.now()) : deps.now(),
     state,
     cursor,
   };
-  if (!existingRun) {
+  if (resuming) {
     persistRun(db, run, cursor);
+  } else {
+    resetRun(db, run);
   }
 
   const userCache = new Map<string, SlackUserSummary>();
