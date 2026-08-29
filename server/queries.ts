@@ -112,6 +112,9 @@ function asTimestampSource(value: string): TimestampSource {
   if (value === TIMESTAMP_SOURCES.messageTimeApproximation) {
     return TIMESTAMP_SOURCES.messageTimeApproximation;
   }
+  if (value === TIMESTAMP_SOURCES.unknownLegacy) {
+    return TIMESTAMP_SOURCES.unknownLegacy;
+  }
   return TIMESTAMP_SOURCES.slackEvent;
 }
 
