@@ -7,7 +7,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { serverEnv } from "./env";
 import * as schema from "./schema";
 
-export type AppDb = BunSQLiteDatabase<typeof schema>;
+export type AppDb = BunSQLiteDatabase<typeof schema> & { $client: Database };
 
 const MIGRATIONS_FOLDER = "./drizzle";
 const LEGACY_SCHEMA = {

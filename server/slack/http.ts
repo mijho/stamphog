@@ -1,15 +1,15 @@
+import type { AppDb } from "../db";
 import { getDb } from "../db";
 import { serverEnv } from "../env";
-import { handleSlackMessageEvent, handleSlackReactionEvent } from "./handlers";
+import { enqueueSlackEvent, scheduleSlackEventProcessing } from "./inbox";
 import { verifySlackWebhookSignature } from "./security";
-import type {
-  SlackEventEnvelope,
-  SlackMessageEvent,
-  SlackReactionEvent,
-} from "./types";
+import type { SlackEventEnvelope } from "./types";
 
 interface SlackHttpOptions {
   signingSecret?: string;
+  botToken?: string;
+  db?: AppDb;
+  scheduleProcessing?: typeof scheduleSlackEventProcessing;
 }
 
 export async function handleSlackStamps(
@@ -66,40 +66,30 @@ export async function handleSlackStamps(
     });
   }
 
-  const botToken = serverEnv.slackBotToken;
-  if (!botToken) {
-    console.log("stamphog slack", { rejected: "missing SLACK_BOT_TOKEN" });
-    return new Response("missing SLACK_BOT_TOKEN", { status: 500 });
+  if (!envelope.event_id) {
+    console.log("stamphog slack", { rejected: "missing event_id" });
+    return new Response("missing event_id", { status: 400 });
   }
 
-  const db = getDb();
-  const eventType = envelope.event.type;
-  console.log("stamphog slack", { event: eventType });
-
-  if (eventType === "message") {
-    return handleSlackMessageEvent(
-      db,
-      envelope.event as SlackMessageEvent,
-      botToken
-    );
-  }
-
-  if (eventType === "reaction_added" || eventType === "reaction_removed") {
-    return handleSlackReactionEvent(
-      db,
-      envelope.event as SlackReactionEvent,
-      botToken
-    );
-  }
-
-  console.log("stamphog slack", {
-    ignored: true,
-    reason: "event_not_handled",
-    event: eventType,
+  const db = options.db ?? getDb();
+  const queued = enqueueSlackEvent(db, {
+    envelope,
+    rawBody,
+    retryNum: request.headers.get("x-slack-retry-num"),
+    retryReason: request.headers.get("x-slack-retry-reason"),
   });
+  const botToken = options.botToken ?? serverEnv.slackBotToken;
+  if (queued.inserted && botToken) {
+    (options.scheduleProcessing ?? scheduleSlackEventProcessing)(
+      db,
+      queued.eventId,
+      botToken
+    );
+  }
+
   return Response.json({
     ok: true,
-    ignored: true,
-    reason: "event_not_handled",
+    queued: true,
+    duplicateSkipped: queued.duplicateSkipped,
   });
 }

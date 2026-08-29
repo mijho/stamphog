@@ -34,6 +34,7 @@
     "seed": "bun server/cli/seed.ts",
     "db:reset": "bun server/cli/reset.ts",
     "backfill": "bun server/cli/backfill.ts",
+    "slack:inbox": "bun server/cli/slack-inbox.ts",
     "test": "bun test"
   },
   "dependencies": {
