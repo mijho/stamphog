@@ -122,9 +122,11 @@ export async function fetchSlackMessageAtTimestamp(args: {
   );
   const body = (await response.json()) as SlackHistoryResponse;
   if (!(response.ok && body.ok)) {
-    return null;
+    throw new Error(
+      `slack message fetch failed: ${body.error ?? "unknown_error"}`
+    );
   }
-  return body.messages?.[0];
+  return body.messages?.[0] ?? null;
 }
 
 export interface SlackHistoryPage {
