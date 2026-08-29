@@ -7,6 +7,7 @@ import type {
   LeaderboardResponse,
   RecentActivity,
 } from "../../../server/queries";
+import { resolveSsrReadAuthHeaders } from "./ssr-read-headers";
 
 const DEFAULT_LEADERBOARD_WINDOW_DAYS = 30;
 const POLL_INTERVAL_MS = 3000;
@@ -16,14 +17,7 @@ async function fetchJson<T>(path: string) {
   const url = import.meta.env.SSR
     ? new URL(path, SERVER_API_BASE)
     : new URL(path, window.location.origin);
-  const headers: Record<string, string> = {};
-  if (import.meta.env.SSR) {
-    const identityHeader = process.env.READ_AUTH_IDENTITY_HEADER;
-    const identityValue = process.env.READ_AUTH_ALLOWED_IDENTITIES;
-    if (identityHeader && identityValue) {
-      headers[identityHeader] = identityValue;
-    }
-  }
+  const headers = import.meta.env.SSR ? resolveSsrReadAuthHeaders() : {};
   const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`${path} failed: ${response.status}`);
