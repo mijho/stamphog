@@ -1,6 +1,7 @@
 import type { AppDb } from "../db";
 import { getDb } from "../db";
 import { serverEnv } from "../env";
+import { redact } from "../redact";
 import { enqueueSlackEvent, scheduleSlackEventProcessing } from "./inbox";
 import { verifySlackWebhookSignature } from "./security";
 import type { SlackEventEnvelope } from "./types";
@@ -17,11 +18,14 @@ export async function handleSlackStamps(
   options: SlackHttpOptions = {}
 ) {
   const rawBody = await request.text();
-  console.log("stamphog slack", {
-    received: true,
-    bytes: rawBody.length,
-    hasSignature: Boolean(request.headers.get("x-slack-signature")),
-  });
+  console.log(
+    "stamphog slack",
+    redact({
+      received: true,
+      bytes: rawBody.length,
+      hasSignature: Boolean(request.headers.get("x-slack-signature")),
+    })
+  );
 
   const signatureError = await verifySlackWebhookSignature(
     request,

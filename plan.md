@@ -458,7 +458,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 - [x] Keep zero-stamp users out of the requester leaderboard and correct the README.
 - [x] Remove wildcard CORS and use same-origin browser API calls.
 - [x] Add the server-side read-auth and workspace-authorization boundary.
-- [ ] Redact tokens, event bodies, and private message text from logs.
+- [x] Redact tokens, event bodies, and private message text from logs.
 - [ ] Make backfill cursor-driven, rate-limit-aware, resumable, and auditable.
 - [ ] Add rule, webhook, signature, retry, query-window, and backfill tests.
 - [ ] Pass the complete local reliability and privacy test suite.

@@ -38,6 +38,8 @@ Browser API calls are same-origin: the Vite dev server proxies `/api/*` to the A
 
 Read access (the leaderboard and recent-events endpoints under `/api/*`) is gated by a middleware boundary. Local development defaults to anonymous access. To authorize with a trusted identity (e.g. a proxy that injects `x-auth-request-user`), set `READ_AUTH_IDENTITY_HEADER`, `READ_AUTH_ALLOWED_IDENTITIES` (comma-separated), and `READ_AUTH_ALLOW_ANONYMOUS=false` so anonymous read access is rejected. This is an identity boundary only — workspace authorization arrives with multi-tenant support; a workspace ID supplied purely by the browser is never sufficient authorization on its own.
 
+Slack event logs never include tokens, raw event bodies, or private message text. Log payloads at the event-receiving and processing boundaries pass through a redactor that strips sensitive fields and truncates long strings, and the failed-event readout (`bun run slack-inbox`) omits raw bodies.
+
 ### Seed local test data (no Slack required)
 
 ```bash

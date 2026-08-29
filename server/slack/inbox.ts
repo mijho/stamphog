@@ -1,5 +1,6 @@
 import { and, asc, eq, lte } from "drizzle-orm";
 import type { AppDb } from "../db";
+import { redact } from "../redact";
 import { eventInbox } from "../schema";
 import { handleSlackMessageEvent, handleSlackReactionEvent } from "./handlers";
 import type {
@@ -235,10 +236,13 @@ export function scheduleSlackEventProcessing(
 ) {
   setTimeout(() => {
     processSlackEvent(db, eventId, botToken).catch((error) => {
-      console.error("stamphog slack event processing failed", {
-        eventId,
-        error: error instanceof Error ? error.message : "unknown error",
-      });
+      console.error(
+        "stamphog slack event processing failed",
+        redact({
+          eventId,
+          error: error instanceof Error ? error.message : "unknown error",
+        })
+      );
     });
   }, 0);
 }
@@ -263,9 +267,12 @@ export function startSlackEventWorker(
   };
 
   const logDrainError = (error: unknown) => {
-    console.error("stamphog slack inbox drain failed", {
-      error: error instanceof Error ? error.message : "unknown error",
-    });
+    console.error(
+      "stamphog slack inbox drain failed",
+      redact({
+        error: error instanceof Error ? error.message : "unknown error",
+      })
+    );
   };
   drain().catch(logDrainError);
   const timer = setInterval(() => {
