@@ -34,6 +34,27 @@ function optionalHttpUrl(name: string) {
   return value;
 }
 
+function parseBoolean(name: string, fallback: boolean) {
+  const raw = optionalValue(name);
+  if (!raw) {
+    return fallback;
+  }
+  if (raw === "true" || raw === "1") {
+    return true;
+  }
+  if (raw === "false" || raw === "0") {
+    return false;
+  }
+  throw new Error(`${name} must be true or false, got ${raw}`);
+}
+
+function parseCommaSeparated(name: string) {
+  return (optionalValue(name) ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 export const serverEnv = Object.freeze({
   apiPort: parsePort(),
   databasePath: optionalValue("DATABASE_PATH") ?? DEFAULT_DATABASE_PATH,
@@ -42,4 +63,9 @@ export const serverEnv = Object.freeze({
   channelIds: optionalValue("CHANNEL_IDS"),
   apiPublicUrl: optionalHttpUrl("VITE_API_URL"),
   posthogHost: optionalHttpUrl("VITE_PUBLIC_POSTHOG_HOST"),
+  readAuthIdentityHeader: optionalValue("READ_AUTH_IDENTITY_HEADER"),
+  readAuthAllowedIdentities: parseCommaSeparated(
+    "READ_AUTH_ALLOWED_IDENTITIES"
+  ),
+  readAuthAllowAnonymous: parseBoolean("READ_AUTH_ALLOW_ANONYMOUS", true),
 });

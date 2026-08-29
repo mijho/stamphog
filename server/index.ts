@@ -1,6 +1,7 @@
 import { serve } from "bun";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
+import { readAuthMiddleware } from "./auth";
 import { getDb } from "./db";
 import { serverEnv } from "./env";
 import { getLeaderboard, getRecentEvents } from "./queries";
@@ -9,6 +10,7 @@ import { startSlackEventWorker } from "./slack/inbox";
 
 export const app = new Hono();
 app.use(logger());
+app.use("/api/*", readAuthMiddleware());
 
 app.get("/", (c) => c.text("stamphog api. UI is http://127.0.0.1:5173"));
 app.get("/health", (c) => c.json({ ok: true }));
