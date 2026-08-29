@@ -1,5 +1,6 @@
 const COLON_REGEX = /:/g;
 const URL_GLOBAL_REGEX = /https?:\/\/[^\s>]+/g;
+const NUMERIC_ID_REGEX = /^\d+$/;
 
 export const STAMP_EMOJIS = {
   stamp: "https://emoji.slack-edge.com/TSS5W8YQZ/stamp/51cd14b42185661a.png",
@@ -64,14 +65,47 @@ function toNormalizedUrl(candidate: string) {
   }
 }
 
-function isQualifyingReviewHost(hostname: string) {
+function isGitHubHost(hostname: string) {
   const host = hostname.toLowerCase();
+  return host === "github.com" || host.endsWith(".github.com");
+}
+
+function isGraphiteHost(hostname: string) {
+  const host = hostname.toLowerCase();
+  return host === "graphite.dev" || host.endsWith(".graphite.dev");
+}
+
+function pathSegments(pathname: string) {
+  return pathname.split("/").filter(Boolean);
+}
+
+function isGitHubPullRequestPath(pathname: string) {
+  const parts = pathSegments(pathname);
   return (
-    host === "github.com" ||
-    host.endsWith(".github.com") ||
-    host === "graphite.dev" ||
-    host.endsWith(".graphite.dev")
+    parts.length >= 4 &&
+    parts[2] === "pull" &&
+    NUMERIC_ID_REGEX.test(parts[3] ?? "")
   );
+}
+
+function isGraphiteReviewPath(pathname: string) {
+  const parts = pathSegments(pathname);
+  return (
+    parts.length >= 5 &&
+    parts[0] === "github" &&
+    parts[1] === "pr" &&
+    NUMERIC_ID_REGEX.test(parts[4] ?? "")
+  );
+}
+
+function isQualifyingReviewUrl(parsed: URL) {
+  if (isGitHubHost(parsed.hostname)) {
+    return isGitHubPullRequestPath(parsed.pathname);
+  }
+  if (isGraphiteHost(parsed.hostname)) {
+    return isGraphiteReviewPath(parsed.pathname);
+  }
+  return false;
 }
 
 export function extractQualifyingReviewUrl(text: string | undefined) {
@@ -81,7 +115,7 @@ export function extractQualifyingReviewUrl(text: string | undefined) {
   const matches = text.match(URL_GLOBAL_REGEX) ?? [];
   for (const candidate of matches) {
     const parsed = toNormalizedUrl(candidate);
-    if (parsed && isQualifyingReviewHost(parsed.hostname)) {
+    if (parsed && isQualifyingReviewUrl(parsed)) {
       return parsed.toString();
     }
   }
