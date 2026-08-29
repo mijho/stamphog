@@ -10,12 +10,11 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
-    allowedHosts: ["millions-lightbox-chamber-matrix.trycloudflare.com"],
   },
   plugins: [
     tsConfigPaths(),
     tanstackStart(),
-    nitro({ preset: "vercel" }),
+    nitro({ preset: "bun" }),
     viteReact(),
     tailwindcss(),
   ],

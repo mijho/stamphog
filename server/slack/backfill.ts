@@ -6,6 +6,7 @@ import {
   normalizeEmoji,
 } from "../../src/lib/slack-rules";
 import type { AppDb } from "../db";
+import { serverEnv } from "../env";
 import { ingestReactionStamp, ingestRequestMessage } from "../ingest";
 import {
   fetchSlackHistoryPage,
@@ -341,7 +342,7 @@ async function fetchHistoryPageOrThrow(args: {
 }
 
 export async function runSlackBackfill(db: AppDb, args: BackfillArgs) {
-  const botToken = process.env.SLACK_BOT_TOKEN;
+  const botToken = serverEnv.slackBotToken;
   if (!botToken) {
     throw new Error("missing SLACK_BOT_TOKEN");
   }

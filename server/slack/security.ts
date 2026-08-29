@@ -1,3 +1,5 @@
+import { serverEnv } from "../env";
+
 function secureCompare(a: string, b: string) {
   if (a.length !== b.length) {
     return false;
@@ -38,7 +40,7 @@ export async function verifySlackWebhookSignature(
   request: Request,
   rawBody: string
 ) {
-  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+  const signingSecret = serverEnv.slackSigningSecret;
   if (!signingSecret) {
     console.log("stamphog slack", { rejected: "missing SLACK_SIGNING_SECRET" });
     return new Response("missing SLACK_SIGNING_SECRET", { status: 500 });
@@ -47,7 +49,9 @@ export async function verifySlackWebhookSignature(
   const slackTimestamp = request.headers.get("x-slack-request-timestamp") ?? "";
   const slackSignature = request.headers.get("x-slack-signature") ?? "";
   if (!(slackTimestamp && slackSignature)) {
-    console.log("stamphog slack", { rejected: "missing slack signature headers" });
+    console.log("stamphog slack", {
+      rejected: "missing slack signature headers",
+    });
     return new Response("missing slack signature headers", { status: 401 });
   }
 

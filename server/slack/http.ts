@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { serverEnv } from "../env";
 import { handleSlackMessageEvent, handleSlackReactionEvent } from "./handlers";
 import { verifySlackWebhookSignature } from "./security";
 import type {
@@ -55,7 +56,7 @@ export async function handleSlackStamps(request: Request) {
     });
   }
 
-  const botToken = process.env.SLACK_BOT_TOKEN;
+  const botToken = serverEnv.slackBotToken;
   if (!botToken) {
     console.log("stamphog slack", { rejected: "missing SLACK_BOT_TOKEN" });
     return new Response("missing SLACK_BOT_TOKEN", { status: 500 });

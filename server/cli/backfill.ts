@@ -1,8 +1,8 @@
-import "../env";
 import { getDb } from "../db";
+import { serverEnv } from "../env";
 import { runSlackBackfill } from "../slack/backfill";
 
-const raw = process.env.CHANNEL_IDS;
+const raw = serverEnv.channelIds;
 if (!raw) {
   throw new Error("missing CHANNEL_IDS env var");
 }

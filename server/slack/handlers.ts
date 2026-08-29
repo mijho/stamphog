@@ -94,7 +94,9 @@ export async function handleSlackReactionEvent(
   const channelId = event.item?.channel;
   const messageTs = event.item?.ts;
   if (!(giverId && channelId && messageTs)) {
-    console.log("stamphog slack", { rejected: "missing reaction event fields" });
+    console.log("stamphog slack", {
+      rejected: "missing reaction event fields",
+    });
     return new Response("missing reaction event fields", { status: 400 });
   }
 
@@ -113,7 +115,9 @@ export async function handleSlackReactionEvent(
 
   const requesterId = message.user;
   if (!requesterId) {
-    console.log("stamphog slack", { rejected: "could not resolve message author" });
+    console.log("stamphog slack", {
+      rejected: "could not resolve message author",
+    });
     return new Response("could not resolve message author", { status: 400 });
   }
 
