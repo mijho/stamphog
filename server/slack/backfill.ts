@@ -3,6 +3,7 @@ import {
   buildRequestDedupeKey,
   extractQualifyingReviewUrl,
   getStampEmojiSet,
+  isSelfStamp,
   normalizeEmoji,
 } from "../../src/lib/slack-rules";
 import type { AppDb } from "../db";
@@ -195,7 +196,7 @@ async function ingestTrackedReactionUsers(args: {
   giverIds: string[];
 }) {
   for (const giverId of args.giverIds) {
-    if (giverId === args.requesterId) {
+    if (isSelfStamp(giverId, args.requesterId)) {
       args.runtime.state.skippedSelfReactions += 1;
       continue;
     }

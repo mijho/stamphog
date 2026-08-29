@@ -3,6 +3,7 @@ import {
   buildRequestDedupeKey,
   extractQualifyingReviewUrl,
   getStampEmojiSet,
+  isSelfStamp,
   normalizeEmoji,
 } from "../../src/lib/slack-rules";
 import type { AppDb } from "../db";
@@ -13,6 +14,16 @@ import {
 } from "../ingest";
 import { fetchSlackMessageAtTimestamp, fetchSlackUserSummary } from "./client";
 import type { SlackMessageEvent, SlackReactionEvent } from "./types";
+
+interface ReactionHandlerDependencies {
+  fetchMessage: typeof fetchSlackMessageAtTimestamp;
+  fetchUser: typeof fetchSlackUserSummary;
+}
+
+const defaultReactionHandlerDependencies: ReactionHandlerDependencies = {
+  fetchMessage: fetchSlackMessageAtTimestamp,
+  fetchUser: fetchSlackUserSummary,
+};
 
 function toOccurredAtMs(eventTs: string | undefined) {
   const parsed = Number(eventTs);
@@ -83,7 +94,8 @@ export async function handleSlackMessageEvent(
 export async function handleSlackReactionEvent(
   db: AppDb,
   event: SlackReactionEvent,
-  botToken: string
+  botToken: string,
+  dependencies = defaultReactionHandlerDependencies
 ) {
   const normalizedReaction = normalizeEmoji(event.reaction ?? "");
   if (!getStampEmojiSet().has(normalizedReaction)) {
@@ -100,7 +112,7 @@ export async function handleSlackReactionEvent(
     return new Response("missing reaction event fields", { status: 400 });
   }
 
-  const message = await fetchSlackMessageAtTimestamp({
+  const message = await dependencies.fetchMessage({
     botToken,
     channelId,
     messageTs,
@@ -129,7 +141,7 @@ export async function handleSlackReactionEvent(
     });
   }
 
-  const requester = await fetchSlackUserSummary({
+  const requester = await dependencies.fetchUser({
     botToken,
     slackUserId: requesterId,
   });
@@ -171,7 +183,11 @@ export async function handleSlackReactionEvent(
     });
   }
 
-  const giver = await fetchSlackUserSummary({
+  if (isSelfStamp(giverId, requesterId)) {
+    return ignored("self_stamp", { channelId, reaction: normalizedReaction });
+  }
+
+  const giver = await dependencies.fetchUser({
     botToken,
     slackUserId: giverId,
   });
