@@ -409,7 +409,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 
 ## Project to-do list
 
-> **Current focus:** Gate A review — the reproducible local Bun baseline is complete and ready for approval.
+> **Current focus:** Phase 1 webhook reliability, stacked on the Bun baseline while Gate A is under review.
 >
 > Check an item only when its implementation, relevant tests, and documentation are complete. Check a gate only after every acceptance criterion for that gate has been demonstrated.
 
@@ -444,8 +444,8 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 
 ### Phase 1 — Correctness, privacy, and Slack reliability
 
-- [ ] Verify Slack signatures against the raw body before JSON parsing.
-- [ ] Reject invalid URL-verification signatures.
+- [x] Verify Slack signatures against the raw body before JSON parsing.
+- [x] Reject invalid URL-verification signatures.
 - [ ] Retain Slack `event_id`, `team_id`, retry metadata, and event timestamps.
 - [ ] Add the durable `event_inbox` schema and migrations.
 - [ ] Acknowledge verified Slack events within three seconds before processing.
