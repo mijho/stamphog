@@ -409,7 +409,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 
 ## Project to-do list
 
-> **Current focus:** Phase 1 webhook reliability, stacked on the Bun baseline while Gate A is under review.
+> **Current focus:** Phase 1 domain rules, stacked on webhook reliability while Gate A is under review.
 >
 > Check an item only when its implementation, relevant tests, and documentation are complete. Check a gate only after every acceptance criterion for that gate has been demonstrated.
 
@@ -450,7 +450,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 - [x] Add the durable `event_inbox` schema and migrations.
 - [x] Acknowledge verified Slack events within three seconds before processing.
 - [x] Add background processing, retries, restart recovery, and failed-job inspection.
-- [ ] Make repeated reaction removal an exact no-op without cross-message deletion.
+- [x] Make repeated reaction removal an exact no-op without cross-message deletion.
 - [ ] Ignore self-stamps consistently in live ingestion and backfill.
 - [ ] Store `occurredAt`, `timestampSource`, and `ingestedAt` for historical events.
 - [ ] Validate GitHub PR and Graphite review paths rather than hostname alone.

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { AppDb } from "./db";
 import { actors, requests, stampEvents } from "./schema";
 
@@ -31,11 +31,6 @@ export interface IngestReactionArgs {
 
 export interface RemoveReactionArgs {
   dedupeKey: string;
-  giverId: string;
-  requesterId: string;
-  reaction: string;
-  source?: string;
-  channelId: string;
 }
 
 function upsertActor(
@@ -154,42 +149,22 @@ export function ingestReactionStamp(db: AppDb, args: IngestReactionArgs) {
 }
 
 export function removeReactionStamp(db: AppDb, args: RemoveReactionArgs) {
-  const exactMatches = db
+  const exactMatch = db
     .select()
     .from(stampEvents)
     .where(eq(stampEvents.dedupeKey, args.dedupeKey))
-    .all();
+    .get();
 
-  if (exactMatches.length > 0) {
-    for (const event of exactMatches) {
-      db.delete(stampEvents).where(eq(stampEvents.id, event.id)).run();
-    }
+  if (exactMatch) {
+    db.delete(stampEvents).where(eq(stampEvents.id, exactMatch.id)).run();
     return {
-      removed: exactMatches.length,
+      removed: 1,
       strategy: "by_dedupe_key" as const,
     };
   }
 
-  const eventSource = args.source ?? `stamp:${args.reaction}`;
-  const fallbackMatches = db
-    .select()
-    .from(stampEvents)
-    .where(
-      and(
-        eq(stampEvents.giverId, args.giverId),
-        eq(stampEvents.requesterId, args.requesterId),
-        eq(stampEvents.channelId, args.channelId),
-        eq(stampEvents.source, eventSource)
-      )
-    )
-    .all();
-
-  for (const event of fallbackMatches) {
-    db.delete(stampEvents).where(eq(stampEvents.id, event.id)).run();
-  }
-
   return {
-    removed: fallbackMatches.length,
-    strategy: "fallback_scan" as const,
+    removed: 0,
+    strategy: "not_found" as const,
   };
 }
