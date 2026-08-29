@@ -10,10 +10,13 @@ import type {
 
 const DEFAULT_LEADERBOARD_WINDOW_DAYS = 30;
 const POLL_INTERVAL_MS = 3000;
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
+const SERVER_API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
 async function fetchJson<T>(path: string) {
-  const response = await fetch(new URL(path, API_BASE));
+  const url = import.meta.env.SSR
+    ? new URL(path, SERVER_API_BASE)
+    : new URL(path, window.location.origin);
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`${path} failed: ${response.status}`);
   }

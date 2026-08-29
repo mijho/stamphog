@@ -34,6 +34,8 @@ bun run dev
 
 StampHog requires Bun 1.4.0 (pinned in `.bun-version` and `package.json`). The UI is Vite at `http://127.0.0.1:5173`. The API is `http://127.0.0.1:8787`. If you see the StampHog UI on port 8787, Slack is hitting Vite — stop `bun run dev`, ensure `.env` has `API_PORT=8787` and **no** `PORT=`, then start again.
 
+Browser API calls are same-origin: the Vite dev server proxies `/api/*` to the API process, so there is no wildcard CORS. `VITE_API_URL` is used only by the server-side renderer to reach the API internally.
+
 ### Seed local test data (no Slack required)
 
 ```bash
