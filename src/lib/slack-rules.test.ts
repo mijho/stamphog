@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { extractQualifyingReviewUrl } from "./slack-rules";
+import { extractQualifyingReviewUrl, STAMP_EMOJIS } from "./slack-rules";
+
+test("tracks 20 stamp emoji", () => {
+  expect(Object.keys(STAMP_EMOJIS)).toHaveLength(20);
+});
 
 test("accepts GitHub pull request paths", () => {
   expect(
