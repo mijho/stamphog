@@ -66,3 +66,33 @@ export const stampEvents = sqliteTable(
   },
   (table) => [index("stamp_events_occurred_at").on(table.occurredAt)]
 );
+
+export const backfillRuns = sqliteTable("backfill_runs", {
+  channelId: text("channel_id").primaryKey(),
+  status: text("status").notNull().default("running"),
+  oldestTs: text("oldest_ts").notNull(),
+  cursor: text("cursor"),
+  scannedMessages: integer("scanned_messages").notNull().default(0),
+  qualifyingMessages: integer("qualifying_messages").notNull().default(0),
+  createdEvents: integer("created_events").notNull().default(0),
+  duplicateEvents: integer("duplicate_events").notNull().default(0),
+  createdRequests: integer("created_requests").notNull().default(0),
+  duplicateRequests: integer("duplicate_requests").notNull().default(0),
+  skippedSelfReactions: integer("skipped_self_reactions").notNull().default(0),
+  skippedMissingUrl: integer("skipped_missing_url").notNull().default(0),
+  skippedMissingAuthor: integer("skipped_missing_author").notNull().default(0),
+  skippedNoReactions: integer("skipped_no_reactions").notNull().default(0),
+  skippedNoTrackedReactions: integer("skipped_no_tracked_reactions")
+    .notNull()
+    .default(0),
+  messagesWithAnyReaction: integer("messages_with_any_reaction")
+    .notNull()
+    .default(0),
+  messagesWithTrackedReaction: integer("messages_with_tracked_reaction")
+    .notNull()
+    .default(0),
+  startedAt: integer("started_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  completedAt: integer("completed_at"),
+  lastError: text("last_error"),
+});
