@@ -3,6 +3,7 @@ import {
   useQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { createIsomorphicFn, createServerOnlyFn } from "@tanstack/react-start";
 import type {
   LeaderboardResponse,
   RecentActivity,
@@ -10,17 +11,43 @@ import type {
 
 const DEFAULT_LEADERBOARD_WINDOW_DAYS = 30;
 const POLL_INTERVAL_MS = 3000;
-const SERVER_API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
+
+const readQueryOnServer = createServerOnlyFn(async (path: string) => {
+  const { getLeaderboard, getRecentEvents } = await import(
+    "../../../server/queries"
+  );
+  const { getDb } = await import("../../../server/db");
+  const db = getDb();
+  const url = new URL(path, "http://localhost");
+  const windowDays = url.searchParams.has("windowDays")
+    ? Number(url.searchParams.get("windowDays"))
+    : undefined;
+  const limit = url.searchParams.has("limit")
+    ? Number(url.searchParams.get("limit"))
+    : undefined;
+  const args = { windowDays, limit };
+  if (url.pathname === "/api/leaderboard") {
+    return getLeaderboard(db, args);
+  }
+  if (url.pathname === "/api/events") {
+    return getRecentEvents(db, args);
+  }
+  throw new Error(`Unknown server query path: ${path}`);
+});
+
+const fetchJsonForEnvironment = createIsomorphicFn()
+  .server(async (path: string) => readQueryOnServer(path))
+  .client(async (path: string) => {
+    const url = new URL(path, window.location.origin);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`${path} failed: ${response.status}`);
+    }
+    return response.json();
+  });
 
 async function fetchJson<T>(path: string) {
-  const url = import.meta.env.SSR
-    ? new URL(path, SERVER_API_BASE)
-    : new URL(path, window.location.origin);
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`${path} failed: ${response.status}`);
-  }
-  return (await response.json()) as T;
+  return (await fetchJsonForEnvironment(path)) as T;
 }
 
 export function leaderboardQuery(windowDays = DEFAULT_LEADERBOARD_WINDOW_DAYS) {
