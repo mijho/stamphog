@@ -201,6 +201,88 @@ Add a `deploy/exe/` directory containing:
 - Create consistent SQLite snapshots through the SQLite backup mechanism or `VACUUM INTO`; do not copy only the main database file while WAL writes may be active.
 - Copy backups off the VM and test restoration into a fresh database. The provider choice is deferred now but must be selected before Gate B is complete.
 
+### Stampy.exe.xyz concrete provisioning plan
+
+The `stampy` VM already exists on exe.dev and is connected directly to
+`mijho/stamphog`, so provisioning is cloning/building/running rather than
+creating the VM. exe.dev supplies the persistent disk, managed HTTPS, and a
+proxy that exposes **one** selected public port; we do not run Caddy — the
+exe.dev proxy is the ingress. The current repo produces two processes:
+
+- **Web** — `bun run .output/server/index.mjs` (TanStack Start + Nitro, Bun
+  preset). Serves the UI and proxies `/api/**` (and must also proxy
+  `/slack/**`) to the internal API. Listens on `PORT` (default Nitro 3000).
+- **API/worker** — `bun run server/index.ts` (Hono on Bun). Serves
+  `/api/leaderboard`, `/api/events`, `POST /slack/stamps`, runs the durable
+  inbox worker and backfill. Listens on `API_PORT` (default 8787).
+
+Plan:
+
+1. **Make the web server the single public entry.** exe.dev proxy → `stampy`
+   port `PORT` (3000). Add a `routeRules` entry `/slack/**` →
+   `${VITE_API_URL}/slack/**` alongside the existing `/api/**` rule, so Slack
+   can POST to `https://stampy.exe.xyz/slack/stamps` and the web forwards it
+   to the internal API. Bind the API to `127.0.0.1` only (it is never
+   directly public; ports 3000–9999 on exe.dev are VM-access-only anyway).
+2. **Set `VITE_API_URL` at build time.** `SERVER_API_BASE` in
+   `src/features/stamps/queries.ts` is inlined from `import.meta.env.VITE_API_URL`
+   during `vite build`, so the release script must build with
+   `VITE_API_URL=http://127.0.0.1:${API_PORT}`. At runtime the SSR fetch and
+   the web proxy both target the internal API.
+3. **Repository deploy assets (`deploy/exe/`).** Add:
+   - `provision.sh` — idempotent first-time setup: install Bun if missing,
+     clone/pull the repo, `bun install --frozen-lockfile`, create
+     `/var/lib/stamphog` (DB), `/var/log/stamphog`, and a release dir; write
+     the service env file; install systemd units; `ssh exe.dev domain add
+     stampy stampy.exe.xyz` (DNS CNAME `stampy.exe.xyz → stampy.exe.xyz`) and
+     `ssh exe.dev share set-public stampy`.
+   - `web.service` / `api.service` — systemd units (Type=simple,
+     `Restart=always`, `EnvironmentFile=/etc/stamphog.env`, working dir =
+     release `current/`, `ExecStart` for each process).
+   - `release.sh` — check out an immutable commit, `bun install
+     --frozen-lockfile`, `VITE_API_URL=http://127.0.0.1:8787 bun run build`,
+     migrate (auto on first `getDb()`), swap a `current` symlink, restart both
+     services, health-check `https://127.0.0.1:3000/health` (add a `/health`
+     to the web server or health-check `/`).
+   - `rollback.sh` — point `current` at the previous release and restart
+     (database is never rolled back).
+   - `backup.sh` / `restore.sh` — `VACUUM INTO`/`.backup` a WAL-consistent
+     SQLite snapshot to `/var/backups/stamphog`; off-VM transfer deferred per
+     decision log #2.
+4. **Service env file** `/etc/stamphog.env` (root-owned `0600`, never in the
+   repo): `PORT=3000`, `API_PORT=8787`,
+   `VITE_API_URL=http://127.0.0.1:8787`, `DATABASE_PATH=/var/lib/stamphog/
+   stamphog.db`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` (or the exe.dev
+   Slack Bot integration host — see decisions), and read-auth settings per
+   the UI-privacy decision below.
+5. **Slack app (external, not in repo).** Point HTTP Event Subscriptions at
+   `https://stampy.exe.xyz/slack/stamps`; grant `reactions:read`,
+   `channels:history`, `users:read`, `chat:write`; set the signing secret.
+   Install the app into the staging workspace and invite it to the channel.
+6. **Validation (Gate B exercise).** URL verification; qualifying message;
+   reaction add; duplicate delivery; removal and removal retry; process restart
+   with a queued event; backfill; confirm unauthenticated users cannot read
+   protected surfaces while Slack still reaches the webhook; confirm SQLite
+   survives restart and a new release; one rollback and one restore rehearsal.
+
+#### Decisions to confirm for the stampy.exe.xyz pilot
+
+- **UI/read API visibility.** Plan Gate B says protect the dashboard with
+  exe.dev identity + email allow-list. But a stamp leaderboard is playful and
+  may be intended to be publicly viewable. Options: (a) public leaderboard
+  (`READ_AUTH_ALLOW_ANONYMOUS=true`, default) — simplest pilot; (b) exe.dev
+  identity-protected (`READ_AUTH_ALLOW_ANONYMOUS=false` + the header exe.dev
+  injects for authenticated proxy users and an email allow-list). The exact
+  identity header name exe.dev sets must be confirmed during implementation.
+- **Slack credential handling.** (a) Plain VM env secrets
+  (`SLACK_BOT_TOKEN` + `SLACK_SIGNING_SECRET` in `/etc/stamphog.env`) — simple,
+  secrets stay out of the repo; (b) exe.dev **Slack Bot integration** so the
+  `xoxb-`/`xapp-` tokens live off-VM and the VM calls
+  `https://<integration>.int.exe.xyz/api/...` — requires a small change to
+  route the Slack Web API base (`SLACK_API_BASE`) in `client.ts`. The webhook
+  still needs the signing secret unless we later adopt Socket Mode (Phase 0
+  removed Socket Mode; HTTP stays the supported transport).
+
 ### Deployment validation
 
 - Install the staging Slack app with HTTP Event Subscriptions pointed at the stable exe.dev webhook URL.
@@ -409,7 +491,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 
 ## Project to-do list
 
-> **Current focus:** Phase 1 domain rules, stacked on webhook reliability while Gate A is under review.
+> **Current focus:** Phase 2 — deploy a protected SQLite staging environment to `stampy.exe.xyz` on exe.dev (Gate A passed).
 >
 > Check an item only when its implementation, relevant tests, and documentation are complete. Check a gate only after every acceptance criterion for that gate has been demonstrated.
 
@@ -440,7 +522,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 - [x] Run migrations and deterministic seed data successfully.
 - [x] Smoke-test health, leaderboard, recent events, themes, tabs, and date windows locally.
 - [x] Update the README with the verified Bun setup and commands.
-- [ ] **Gate A:** approve the reproducible local Bun baseline.
+- [x] **Gate A:** approve the reproducible local Bun baseline.
 
 ### Phase 1 — Correctness, privacy, and Slack reliability
 
