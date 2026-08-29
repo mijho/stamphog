@@ -6,6 +6,7 @@ function buildApp(config?: Parameters<typeof readAuthMiddleware>[0]) {
   const app = new Hono();
   app.use("/api/*", readAuthMiddleware(config));
   app.get("/api/leaderboard", (c) => c.json({ ok: true }));
+  app.get("/api/events", (c) => c.json({ ok: true }));
   app.get("/slack/stamps", (c) => c.text("slack ok"));
   return app;
 }
@@ -18,8 +19,12 @@ test("anonymous access is allowed by default (local development)", async () => {
 
 test("anonymous access is rejected when allowAnonymous is false", async () => {
   const app = buildApp({ allowAnonymous: false });
-  const res = await app.request("/api/leaderboard");
-  expect(res.status).toBe(401);
+  const [leaderboard, events] = await Promise.all([
+    app.request("/api/leaderboard"),
+    app.request("/api/events"),
+  ]);
+  expect(leaderboard.status).toBe(401);
+  expect(events.status).toBe(401);
 });
 
 test("missing identity header is rejected when auth is configured", async () => {

@@ -34,7 +34,7 @@ bun run dev
 
 StampHog requires Bun 1.4.0 (pinned in `.bun-version` and `package.json`). The UI is Vite at `http://127.0.0.1:5173`. The API is `http://127.0.0.1:8787`. If you see the StampHog UI on port 8787, Slack is hitting Vite — stop `bun run dev`, ensure `.env` has `API_PORT=8787` and **no** `PORT=`, then start again.
 
-Browser API calls are same-origin: the Vite dev server proxies `/api/*` to the API process, so there is no wildcard CORS. `VITE_API_URL` is used only by the server-side renderer to reach the API internally.
+Browser API calls are same-origin: the web server proxies `/api/*` to the API process using `VITE_API_URL`, so there is no wildcard CORS. Server-side rendering reads directly from the database without exposing a remotely callable server function that bypasses the API read-auth boundary.
 
 Read access (the leaderboard and recent-events endpoints under `/api/*`) is gated by a middleware boundary. Local development defaults to anonymous access. To authorize with a trusted identity (e.g. a proxy that injects `x-auth-request-user`), set `READ_AUTH_IDENTITY_HEADER`, `READ_AUTH_ALLOWED_IDENTITIES` (comma-separated), and `READ_AUTH_ALLOW_ANONYMOUS=false` so anonymous read access is rejected. This is an identity boundary only — workspace authorization arrives with multi-tenant support; a workspace ID supplied purely by the browser is never sufficient authorization on its own.
 

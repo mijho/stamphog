@@ -3,7 +3,7 @@ import {
   useQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createServerFn } from "@tanstack/react-start";
+import { createIsomorphicFn, createServerOnlyFn } from "@tanstack/react-start";
 import type {
   LeaderboardResponse,
   RecentActivity,
@@ -12,7 +12,7 @@ import type {
 const DEFAULT_LEADERBOARD_WINDOW_DAYS = 30;
 const POLL_INTERVAL_MS = 3000;
 
-async function readQueryOnServer(path: string) {
+const readQueryOnServer = createServerOnlyFn(async (path: string) => {
   const { getLeaderboard, getRecentEvents } = await import(
     "../../../server/queries"
   );
@@ -33,22 +33,21 @@ async function readQueryOnServer(path: string) {
     return getRecentEvents(db, args);
   }
   throw new Error(`Unknown server query path: ${path}`);
-}
+});
 
-const serverReadQuery = createServerFn({ method: "GET" })
-  .inputValidator((path: string) => path)
-  .handler(async ({ data: path }) => readQueryOnServer(path));
+const fetchJsonForEnvironment = createIsomorphicFn()
+  .server(async (path: string) => readQueryOnServer(path))
+  .client(async (path: string) => {
+    const url = new URL(path, window.location.origin);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`${path} failed: ${response.status}`);
+    }
+    return response.json();
+  });
 
 async function fetchJson<T>(path: string) {
-  if (import.meta.env.SSR) {
-    return (await serverReadQuery({ data: path })) as T;
-  }
-  const url = new URL(path, window.location.origin);
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`${path} failed: ${response.status}`);
-  }
-  return (await response.json()) as T;
+  return (await fetchJsonForEnvironment(path)) as T;
 }
 
 export function leaderboardQuery(windowDays = DEFAULT_LEADERBOARD_WINDOW_DAYS) {
