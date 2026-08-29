@@ -18,7 +18,7 @@ StampHog gamifies code review culture. It watches your Slack channels for PR lin
 **How it works:**
 
 1. Someone posts a GitHub or Graphite PR link in Slack
-2. A reviewer reacts with a stamp emoji (there are 19 tracked variants)
+  2. A reviewer reacts with a stamp emoji (there are 20 tracked variants)
 3. StampHog records the stamp and updates the leaderboard
 
 Built with [TanStack Start](https://tanstack.com/start) + SQLite + [PostHog](https://posthog.com).
@@ -79,7 +79,9 @@ Quick tunnels get a new hostname every `cloudflared` restart. Re-paste the Reque
 
 ### What counts as a stamp?
 
-StampHog tracks 19 emoji variants including `stamp`, `lgtm`, `approved_stamp`, `check`, and more. The reacted message must contain a qualifying URL (`github.com` or `graphite.dev`).
+StampHog tracks 20 emoji: `stamp`, `stampstamp`, `approved_stamp`, `rubberstamp`, `fixed-stamp`, `kirby-stamp`, `party-rubber-stamp`, `turbo-stamp`, `sloth-zootopia-stamp`, `bufo-fastest-stamp-in-the-west`, `please-sir-i-want-some-more-stamp`, `lgtm`, `lgtm2`, `bufo-lgtm`, `check`, `gold_check`, `cowboy-check`, `done`, `white_check_mark`, and `heavy_check_mark`.
+
+The reacted message must contain a GitHub pull request (`/{owner}/{repo}/pull/{number}`) or Graphite review (`/github/pr/{owner}/{repo}/{number}`) URL.
 
 Most of those names are custom emoji. On a workspace that does not have them, `:white_check_mark:` (✅) and `:heavy_check_mark:` still count.
 
@@ -87,7 +89,9 @@ Most of those names are custom emoji. On a workspace that does not have them, `:
 
 - **Reviewer** (stamp giver) = the user who added the reaction
 - **Requester** = the author of the reacted message (looked up via Slack API)
-- PR request messages are tracked as soon as they're posted, so requesters appear even with 0 stamps
+- Self-stamps are ignored
+- PR request messages are tracked as soon as they are posted, and they count in the request total
+- Requesters with zero stamps are left off the requester leaderboard. Unstamped PRs will get a separate “awaiting review” view later, rather than a zero-score ranking
 - Non-tracked emojis and messages without qualifying URLs are ignored
 - Thread replies are ignored
 

@@ -108,6 +108,16 @@ test("reaction remove does not delete stamps from another message", () => {
   expect(getLeaderboard(db, {}).totals.stamps).toBe(2);
 });
 
+test("zero-stamp requesters are excluded from the requester leaderboard", () => {
+  const db = createDb(":memory:");
+  ingestSampleRequest(db);
+
+  const leaderboard = getLeaderboard(db, {});
+  expect(leaderboard.totals.requests).toBe(1);
+  expect(leaderboard.totals.stamps).toBe(0);
+  expect(leaderboard.requesters).toEqual([]);
+});
+
 test("live stamps store slack event time separately from ingest time", () => {
   const db = createDb(":memory:");
   ingestSampleRequest(db);
