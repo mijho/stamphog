@@ -456,7 +456,7 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 - [x] Validate GitHub PR and Graphite review paths rather than hostname alone.
 - [x] Confirm and document the 20 tracked emoji.
 - [x] Keep zero-stamp users out of the requester leaderboard and correct the README.
-- [ ] Remove wildcard CORS and use same-origin browser API calls.
+- [x] Remove wildcard CORS and use same-origin browser API calls.
 - [ ] Add the server-side read-auth and workspace-authorization boundary.
 - [ ] Redact tokens, event bodies, and private message text from logs.
 - [ ] Make backfill cursor-driven, rate-limit-aware, resumable, and auditable.
