@@ -111,6 +111,9 @@ bun run backfill
 
 - Hard-limited to the most recent 90 days
 - Idempotent via dedupe keys, safe to rerun
+- Cursor-driven and resumable: progress (Slack pagination cursor plus counters) is persisted per channel in `backfill_runs`, so an interrupted run continues from where it left off
+- Rate-limit-aware: Slack `429`/`ratelimited` responses are retried honoring `Retry-After` instead of failing
+- Auditable: `backfill_runs` records status, counters, timestamps, and last error for each channel
 
 ## Development
 

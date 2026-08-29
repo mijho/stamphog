@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { TIMESTAMP_SOURCES } from "../../src/lib/event-time";
 import {
   buildReactionDedupeKey,
@@ -10,10 +11,12 @@ import {
 import type { AppDb } from "../db";
 import { serverEnv } from "../env";
 import { ingestReactionStamp, ingestRequestMessage } from "../ingest";
+import { backfillRuns as backfillRunsTable } from "../schema";
 import {
   fetchSlackHistoryPage,
   fetchSlackUserSummary,
   type SlackHistoryMessage,
+  type SlackHistoryPage,
   type SlackUserSummary,
 } from "./client";
 
@@ -21,11 +24,28 @@ const DEFAULT_MAX_MESSAGES = 5000;
 const MAX_BACKFILL_MESSAGES = 50_000;
 const BACKFILL_WINDOW_DAYS = 90;
 const PAGE_SIZE = 200;
+const MAX_RATE_LIMIT_RETRIES = 3;
 
 export interface BackfillArgs {
   channelId: string;
   oldestTs?: string;
   maxMessages?: number;
+}
+
+export interface BackfillDeps {
+  botToken?: string;
+  fetchPage: (args: {
+    botToken: string;
+    channelId: string;
+    cursor?: string;
+    oldestTs?: string;
+  }) => Promise<SlackHistoryPage>;
+  fetchUserSummary: (args: {
+    botToken: string;
+    slackUserId: string;
+  }) => Promise<SlackUserSummary>;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
 }
 
 type CountMap = Map<string, number>;
@@ -80,6 +100,28 @@ function createBackfillState(): BackfillState {
   };
 }
 
+const SCALAR_KEYS: Array<keyof Omit<BackfillState, CountMapKey>> = [
+  "scannedMessages",
+  "qualifyingMessages",
+  "createdEvents",
+  "duplicateEvents",
+  "createdRequests",
+  "duplicateRequests",
+  "skippedSelfReactions",
+  "skippedMissingUrl",
+  "skippedMissingAuthor",
+  "skippedNoReactions",
+  "skippedNoTrackedReactions",
+  "messagesWithAnyReaction",
+  "messagesWithTrackedReaction",
+];
+
+type CountMapKey =
+  | "allReactionNames"
+  | "trackedReactionNames"
+  | "untrackedReactionNames"
+  | "qualifyingUrlHosts";
+
 function incrementCount(
   counterMap: CountMap,
   key: string | undefined,
@@ -116,8 +158,8 @@ function boundedMaxMessages(maxMessages: number | undefined) {
   );
 }
 
-function effectiveOldestTs(userOldestTs: string | undefined) {
-  const cutoffMs = Date.now() - BACKFILL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+function effectiveOldestTs(userOldestTs: string | undefined, now: number) {
+  const cutoffMs = now - BACKFILL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const cutoffTs = String(Math.floor(cutoffMs / 1000));
   if (!userOldestTs) {
     return cutoffTs;
@@ -327,42 +369,133 @@ async function processMessage(
   }
 }
 
-async function fetchHistoryPageOrThrow(args: {
-  botToken: string;
-  channelId: string;
-  cursor?: string;
-  oldestTs?: string;
-}) {
-  const page = await fetchSlackHistoryPage(args);
-
-  if (!page.ok) {
-    throw new Error(
-      `slack history fetch failed: ${page.error ?? "unknown_error"}`
-    );
+function persistRun(db: AppDb, run: BackfillRunRecord, cursor?: string) {
+  const now = Date.now();
+  const scalarValues = {} as Record<string, unknown>;
+  for (const key of SCALAR_KEYS) {
+    scalarValues[key] = run.state[key];
   }
-
-  return page;
+  db.insert(backfillRunsTable)
+    .values({
+      channelId: run.channelId,
+      status: "running",
+      oldestTs: run.oldestTs,
+      cursor: cursor ?? null,
+      startedAt: run.startedAt,
+      updatedAt: now,
+      completedAt: null,
+      lastError: null,
+      ...scalarValues,
+    })
+    .onConflictDoUpdate({
+      target: backfillRunsTable.channelId,
+      set: {
+        status: "running",
+        cursor: cursor ?? null,
+        updatedAt: now,
+        completedAt: null,
+        lastError: null,
+        ...scalarValues,
+      },
+    })
+    .run();
 }
 
-export async function runSlackBackfill(db: AppDb, args: BackfillArgs) {
-  const botToken = serverEnv.slackBotToken;
+function completeRun(db: AppDb, run: BackfillRunRecord) {
+  const now = Date.now();
+  const scalarValues = {} as Record<string, unknown>;
+  for (const key of SCALAR_KEYS) {
+    scalarValues[key] = run.state[key];
+  }
+  db.update(backfillRunsTable)
+    .set({
+      status: "completed",
+      updatedAt: now,
+      completedAt: now,
+      lastError: null,
+      ...scalarValues,
+    })
+    .where(eq(backfillRunsTable.channelId, run.channelId))
+    .run();
+}
+
+function failRun(db: AppDb, run: BackfillRunRecord, error: string) {
+  db.update(backfillRunsTable)
+    .set({
+      status: "failed",
+      updatedAt: Date.now(),
+      lastError: error,
+    })
+    .where(eq(backfillRunsTable.channelId, run.channelId))
+    .run();
+}
+
+interface BackfillRunRecord {
+  channelId: string;
+  oldestTs: string;
+  startedAt: number;
+  state: BackfillState;
+  cursor: string | undefined;
+}
+
+const DEFAULT_DEPS: BackfillDeps = {
+  fetchPage: fetchSlackHistoryPage,
+  fetchUserSummary: fetchSlackUserSummary,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now: () => Date.now(),
+};
+
+export async function runSlackBackfill(
+  db: AppDb,
+  args: BackfillArgs,
+  deps: BackfillDeps = DEFAULT_DEPS
+) {
+  const botToken = deps.botToken ?? serverEnv.slackBotToken;
   if (!botToken) {
     throw new Error("missing SLACK_BOT_TOKEN");
   }
 
   const maxMessages = boundedMaxMessages(args.maxMessages);
-  const oldestTs = effectiveOldestTs(args.oldestTs);
   const trackedStampEmojis = getStampEmojiSet();
-  const state = createBackfillState();
-  const userCache = new Map<string, SlackUserSummary>();
 
+  const existingRun = db
+    .select()
+    .from(backfillRunsTable)
+    .where(eq(backfillRunsTable.channelId, args.channelId))
+    .get();
+
+  const resuming = getResuming(existingRun);
+  const oldestTs = getResumeOldestTs({
+    resuming,
+    existingRun,
+    userOldestTs: args.oldestTs,
+    now: deps.now(),
+  });
+  let cursor = resuming ? (existingRun?.cursor ?? undefined) : undefined;
+
+  const state = getResumeState({ resuming, existingRun });
+
+  const run: BackfillRunRecord = {
+    channelId: args.channelId,
+    oldestTs,
+    startedAt: existingRun?.startedAt ?? deps.now(),
+    state,
+    cursor,
+  };
+  if (!existingRun) {
+    persistRun(db, run, cursor);
+  }
+
+  const userCache = new Map<string, SlackUserSummary>();
   const getUserSummary = async (slackUserId: string) => {
     const cached = userCache.get(slackUserId);
     if (cached) {
       return cached;
     }
-
-    const summary = await fetchSlackUserSummary({ botToken, slackUserId });
+    const summary = await deps.fetchUserSummary({
+      botToken,
+      slackUserId,
+    });
     userCache.set(slackUserId, summary);
     return summary;
   };
@@ -375,30 +508,32 @@ export async function runSlackBackfill(db: AppDb, args: BackfillArgs) {
     getUserSummary,
   };
 
-  let cursor: string | undefined;
-  while (state.scannedMessages < maxMessages) {
-    const page = await fetchHistoryPageOrThrow({
-      botToken,
-      channelId: args.channelId,
-      cursor,
-      oldestTs,
-    });
+  try {
+    while (state.scannedMessages < maxMessages) {
+      const page = await fetchPageWithRetry(deps, {
+        botToken,
+        channelId: args.channelId,
+        cursor,
+        oldestTs,
+      });
 
-    if (page.messages.length === 0) {
-      break;
-    }
-
-    for (const message of page.messages) {
-      if (state.scannedMessages >= maxMessages) {
+      if (page.messages.length === 0) {
         break;
       }
-      await processMessage(runtime, message);
+
+      await processMessageBatch(runtime, page.messages, maxMessages);
+
+      persistRun(db, run, page.nextCursor || cursor);
+      if (!page.nextCursor || page.messages.length < PAGE_SIZE) {
+        break;
+      }
+      cursor = page.nextCursor;
     }
 
-    if (!page.nextCursor || page.messages.length < PAGE_SIZE) {
-      break;
-    }
-    cursor = page.nextCursor;
+    completeRun(db, run);
+  } catch (error) {
+    failRun(db, run, error instanceof Error ? error.message : "unknown error");
+    throw error;
   }
 
   const summary = buildSummary({
@@ -415,3 +550,97 @@ export async function runSlackBackfill(db: AppDb, args: BackfillArgs) {
     backfillWindowDays: BACKFILL_WINDOW_DAYS,
   };
 }
+
+function seedStateFromRun(run: {
+  scannedMessages: number;
+  qualifyingMessages: number;
+  createdEvents: number;
+  duplicateEvents: number;
+  createdRequests: number;
+  duplicateRequests: number;
+  skippedSelfReactions: number;
+  skippedMissingUrl: number;
+  skippedMissingAuthor: number;
+  skippedNoReactions: number;
+  skippedNoTrackedReactions: number;
+  messagesWithAnyReaction: number;
+  messagesWithTrackedReaction: number;
+}): BackfillState {
+  const state = createBackfillState();
+  for (const key of SCALAR_KEYS) {
+    (state as unknown as Record<string, unknown>)[key] = run[key];
+  }
+  return state;
+}
+
+async function fetchPageWithRetry(
+  deps: BackfillDeps,
+  args: {
+    botToken: string;
+    channelId: string;
+    cursor?: string;
+    oldestTs?: string;
+  }
+) {
+  let lastRetryDelay = 0;
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
+    const page = await deps.fetchPage(args);
+    if (page.ok) {
+      return page;
+    }
+    if (!page.ratelimited) {
+      throw new Error(
+        `slack history fetch failed: ${page.error ?? "unknown_error"}`
+      );
+    }
+    if (attempt >= MAX_RATE_LIMIT_RETRIES) {
+      throw new Error("slack history fetch rate limited; giving up");
+    }
+    lastRetryDelay = (page.retryAfterSeconds ?? 1) * 1000;
+    await deps.sleep(lastRetryDelay);
+  }
+  throw new Error("unreachable");
+}
+
+function getResuming(
+  existingRun: BackfillRunRow | undefined
+): existingRun is BackfillRunRow {
+  return Boolean(existingRun && existingRun.status !== "completed");
+}
+
+function getResumeOldestTs(args: {
+  resuming: boolean;
+  existingRun: BackfillRunRow | undefined;
+  userOldestTs: string | undefined;
+  now: number;
+}) {
+  if (args.resuming && args.existingRun) {
+    return args.existingRun.oldestTs;
+  }
+  return effectiveOldestTs(args.userOldestTs, args.now);
+}
+
+function getResumeState(args: {
+  resuming: boolean;
+  existingRun: BackfillRunRow | undefined;
+}) {
+  if (args.resuming && args.existingRun) {
+    return seedStateFromRun(args.existingRun);
+  }
+  return createBackfillState();
+}
+
+async function processMessageBatch(
+  runtime: RuntimeContext,
+  messages: SlackHistoryMessage[],
+  maxMessages: number
+) {
+  for (const message of messages) {
+    if (runtime.state.scannedMessages >= maxMessages) {
+      break;
+    }
+    await processMessage(runtime, message);
+  }
+}
+
+type BackfillRunRow = typeof backfillRunsTable.$inferSelect;

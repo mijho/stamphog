@@ -46,6 +46,7 @@ interface SlackHistoryResponse {
   error?: string;
   messages?: SlackHistoryMessage[];
   response_metadata?: { next_cursor?: string };
+  retry_after?: number;
 }
 
 function pickDisplayName(
@@ -126,12 +127,37 @@ export async function fetchSlackMessageAtTimestamp(args: {
   return body.messages?.[0];
 }
 
+export interface SlackHistoryPage {
+  ok: boolean;
+  error?: string;
+  messages: SlackHistoryMessage[];
+  nextCursor: string;
+  ratelimited: boolean;
+  retryAfterSeconds?: number;
+}
+
+function parseRetryAfterSeconds(
+  response: Response,
+  body: SlackHistoryResponse
+) {
+  const header = response.headers.get("retry-after");
+  const fromHeader = header ? Number(header) : undefined;
+  if (fromHeader !== undefined && Number.isFinite(fromHeader)) {
+    return Math.max(1, Math.floor(fromHeader));
+  }
+  const fromBody = body.retry_after;
+  if (fromBody !== undefined && Number.isFinite(fromBody)) {
+    return Math.max(1, Math.ceil(fromBody));
+  }
+  return undefined;
+}
+
 export async function fetchSlackHistoryPage(args: {
   botToken: string;
   channelId: string;
   cursor?: string;
   oldestTs?: string;
-}) {
+}): Promise<SlackHistoryPage> {
   const params = new URLSearchParams({
     channel: args.channelId,
     limit: "200",
@@ -156,5 +182,7 @@ export async function fetchSlackHistoryPage(args: {
     error: body.error,
     messages: body.messages ?? [],
     nextCursor: body.response_metadata?.next_cursor ?? "",
+    ratelimited: response.status === 429 || body.error === "ratelimited",
+    retryAfterSeconds: parseRetryAfterSeconds(response, body),
   };
 }

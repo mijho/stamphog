@@ -1,0 +1,23 @@
+CREATE TABLE `backfill_runs` (
+	`channel_id` text PRIMARY KEY NOT NULL,
+	`status` text DEFAULT 'running' NOT NULL,
+	`oldest_ts` text NOT NULL,
+	`cursor` text,
+	`scanned_messages` integer DEFAULT 0 NOT NULL,
+	`qualifying_messages` integer DEFAULT 0 NOT NULL,
+	`created_events` integer DEFAULT 0 NOT NULL,
+	`duplicate_events` integer DEFAULT 0 NOT NULL,
+	`created_requests` integer DEFAULT 0 NOT NULL,
+	`duplicate_requests` integer DEFAULT 0 NOT NULL,
+	`skipped_self_reactions` integer DEFAULT 0 NOT NULL,
+	`skipped_missing_url` integer DEFAULT 0 NOT NULL,
+	`skipped_missing_author` integer DEFAULT 0 NOT NULL,
+	`skipped_no_reactions` integer DEFAULT 0 NOT NULL,
+	`skipped_no_tracked_reactions` integer DEFAULT 0 NOT NULL,
+	`messages_with_any_reaction` integer DEFAULT 0 NOT NULL,
+	`messages_with_tracked_reaction` integer DEFAULT 0 NOT NULL,
+	`started_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`completed_at` integer,
+	`last_error` text
+);
