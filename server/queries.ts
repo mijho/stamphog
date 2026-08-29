@@ -204,22 +204,31 @@ export function getLeaderboard(
 
 export function getRecentEvents(
   db: AppDb,
-  args: { limit?: number }
+  args: { limit?: number; windowDays?: number }
 ): RecentActivity[] {
   const limit = clampLimit(args.limit, DEFAULT_RECENT_EVENTS_LIMIT);
+  const sinceTs = args.windowDays
+    ? Date.now() - args.windowDays * 24 * 60 * 60 * 1000
+    : undefined;
   const actorMap = getActorProfileMap(db);
-  const stamps = db
+  const stampsQuery = db
     .select()
     .from(stampEvents)
     .orderBy(desc(stampEvents.occurredAt))
-    .limit(limit)
-    .all();
-  const requestRows = db
+    .$dynamic();
+  if (sinceTs !== undefined) {
+    stampsQuery.where(gte(stampEvents.occurredAt, sinceTs));
+  }
+  const stamps = stampsQuery.limit(limit).all();
+  const requestRowsQuery = db
     .select()
     .from(requests)
     .orderBy(desc(requests.occurredAt))
-    .limit(limit)
-    .all();
+    .$dynamic();
+  if (sinceTs !== undefined) {
+    requestRowsQuery.where(gte(requests.occurredAt, sinceTs));
+  }
+  const requestRows = requestRowsQuery.limit(limit).all();
 
   const stampItems: StampActivity[] = stamps.map((event) => {
     const giver = resolveActorProfile(actorMap, event.giverId);
