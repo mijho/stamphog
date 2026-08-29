@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
+import { expect, test } from "bun:test";
 import { type AppDb, createDb } from "./db";
 import {
   type IngestReactionArgs,
@@ -47,13 +46,13 @@ test("request ingest is idempotent and updates prUrl", () => {
     prUrl: "https://github.com/mijho/stamphog/pull/2",
   });
 
-  assert.equal(first.duplicateSkipped, false);
-  assert.equal(second.duplicateSkipped, true);
-  assert.equal(second.requestId, first.requestId);
+  expect(first.duplicateSkipped).toBe(false);
+  expect(second.duplicateSkipped).toBe(true);
+  expect(second.requestId).toBe(first.requestId);
 
   const events = getRecentEvents(db, {});
   const request = events.find((event) => event.type === "request");
-  assert.equal(request?.prUrl, "https://github.com/mijho/stamphog/pull/2");
+  expect(request?.prUrl).toBe("https://github.com/mijho/stamphog/pull/2");
 });
 
 test("reaction ingest does not double-count", () => {
@@ -62,12 +61,12 @@ test("reaction ingest does not double-count", () => {
   const first = ingestSampleStamp(db);
   const second = ingestSampleStamp(db);
 
-  assert.equal(first.duplicateSkipped, false);
-  assert.equal(second.duplicateSkipped, true);
+  expect(first.duplicateSkipped).toBe(false);
+  expect(second.duplicateSkipped).toBe(true);
 
   const leaderboard = getLeaderboard(db, {});
-  assert.equal(leaderboard.totals.stamps, 1);
-  assert.equal(leaderboard.givers[0]?.stampsGiven, 1);
+  expect(leaderboard.totals.stamps).toBe(1);
+  expect(leaderboard.givers[0]?.stampsGiven).toBe(1);
 });
 
 test("reaction remove deletes by dedupe key", () => {
@@ -84,9 +83,9 @@ test("reaction remove deletes by dedupe key", () => {
     channelId: "C1",
   });
 
-  assert.equal(removed.removed, 1);
-  assert.equal(removed.strategy, "by_dedupe_key");
-  assert.equal(getLeaderboard(db, {}).totals.stamps, 0);
+  expect(removed.removed).toBe(1);
+  expect(removed.strategy).toBe("by_dedupe_key");
+  expect(getLeaderboard(db, {}).totals.stamps).toBe(0);
 });
 
 test("reaction remove falls back when dedupe key is missing", () => {
@@ -103,7 +102,7 @@ test("reaction remove falls back when dedupe key is missing", () => {
     channelId: "C1",
   });
 
-  assert.equal(removed.removed, 1);
-  assert.equal(removed.strategy, "fallback_scan");
-  assert.equal(getLeaderboard(db, {}).totals.stamps, 0);
+  expect(removed.removed).toBe(1);
+  expect(removed.strategy).toBe("fallback_scan");
+  expect(getLeaderboard(db, {}).totals.stamps).toBe(0);
 });

@@ -65,6 +65,13 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const theme = Route.useLoaderData();
+  const posthogKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY;
+  const content = (
+    <ThemeProvider theme={theme}>
+      <TooltipProvider>{children}</TooltipProvider>
+    </ThemeProvider>
+  );
+
   return (
     <html
       className={theme === "system" ? "" : theme}
@@ -82,19 +89,21 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         )}
       </head>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
-        <PostHogProvider
-          apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
-          options={{
-            api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
-            defaults: "2025-05-24",
-            capture_exceptions: true,
-            debug: import.meta.env.DEV,
-          }}
-        >
-          <ThemeProvider theme={theme}>
-            <TooltipProvider>{children}</TooltipProvider>
-          </ThemeProvider>
-        </PostHogProvider>
+        {posthogKey ? (
+          <PostHogProvider
+            apiKey={posthogKey}
+            options={{
+              api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+              defaults: "2025-05-24",
+              capture_exceptions: true,
+              debug: import.meta.env.DEV,
+            }}
+          >
+            {content}
+          </PostHogProvider>
+        ) : (
+          content
+        )}
         <Scripts />
       </body>
     </html>

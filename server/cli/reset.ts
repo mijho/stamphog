@@ -1,4 +1,3 @@
-import "../env";
 import { getDb } from "../db";
 import { resetDatabase } from "../seed";
 

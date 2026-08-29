@@ -26,24 +26,29 @@ Built with [TanStack Start](https://tanstack.com/start) + SQLite + [PostHog](htt
 ## Quick Start
 
 ```bash
-pnpm install
+bun install --frozen-lockfile
 cp .env.example .env
-pnpm dev
+bun run db:migrate
+bun run dev
 ```
 
-The UI is Vite at `http://127.0.0.1:5173`. The API is `http://127.0.0.1:8787`. If you see the StampHog UI on port 8787, Slack is hitting Vite — stop `pnpm dev`, ensure `.env` has `API_PORT=8787` and **no** `PORT=`, then start again.
+StampHog requires Bun 1.4.0 (pinned in `.bun-version` and `package.json`). The UI is Vite at `http://127.0.0.1:5173`. The API is `http://127.0.0.1:8787`. If you see the StampHog UI on port 8787, Slack is hitting Vite — stop `bun run dev`, ensure `.env` has `API_PORT=8787` and **no** `PORT=`, then start again.
 
 ### Seed local test data (no Slack required)
 
 ```bash
 # Keep existing data, replace prior fixture rows
-pnpm seed
+bun run seed
 
 # Optional: wipe all existing data first
-pnpm seed -- --reset
+bun run seed -- --reset
 ```
 
 This creates sample actors, PR requests, and stamp events so the leaderboard and recent events UI are populated immediately.
+
+### Database migrations
+
+The API applies versioned Drizzle migrations when it starts. A database created by an older StampHog checkout is verified and backed up beside the original as `*.pre-drizzle-<timestamp>.bak` before it is adopted by the migration system.
 
 ## Slack Setup
 
@@ -91,7 +96,7 @@ Most of those names are custom emoji. On a workspace that does not have them, `:
 Import existing qualifying reactions from Slack channels listed in `CHANNEL_IDS`:
 
 ```bash
-pnpm backfill
+bun run backfill
 ```
 
 - Hard-limited to the most recent 90 days
@@ -100,18 +105,21 @@ pnpm backfill
 ## Development
 
 ```bash
-pnpm dev              # Run web app + API together
-pnpm dev:web          # Web app only (Vite)
-pnpm dev:api          # API only
-pnpm seed             # Load fixture data
-pnpm backfill         # Import Slack history
-pnpm test             # Ingest contract tests
-pnpm build            # Production build
-pnpm preview          # Preview production build
-pnpm check-types      # TypeScript check
-pnpm check            # Lint (ultracite/biome)
-pnpm fix              # Auto-fix lint issues
+bun run dev              # Run web app + API together
+bun run dev:web          # Web app only (Vite)
+bun run dev:api          # API only
+bun run db:migrate       # Apply versioned database migrations
+bun run seed             # Load fixture data
+bun run backfill         # Import Slack history
+bun test                 # Ingest contract tests
+bun run build            # Production build
+bun run preview          # Preview production build
+bun run check-types      # TypeScript check
+bun run check            # Lint (ultracite/biome)
+bun run fix              # Auto-fix lint issues
 ```
+
+The Bun 1.4.0 baseline was verified with a frozen install, tests, type checking, linting, a production build, fresh migrations and seed data, and local API/UI smoke tests.
 
 ## License
 
