@@ -51,6 +51,10 @@ export function getStampEmojiSet() {
   );
 }
 
+export function isSelfStamp(giverId: string, requesterId: string) {
+  return giverId === requesterId;
+}
+
 function toNormalizedUrl(candidate: string) {
   const cleaned = candidate.replace(/[)>.,!?]+$/g, "").split("|", 1)[0] ?? "";
   try {
