@@ -6,6 +6,7 @@ import { getDb } from "./db";
 import { serverEnv } from "./env";
 import { getLeaderboard, getRecentEvents } from "./queries";
 import { handleSlackStamps } from "./slack/http";
+import { startSlackEventWorker } from "./slack/inbox";
 
 export const app = new Hono();
 app.use(logger());
@@ -49,7 +50,10 @@ app.get("/api/events", (c) => {
 app.post("/slack/stamps", (c) => handleSlackStamps(c.req.raw));
 
 if (import.meta.main) {
-  getDb();
+  const db = getDb();
+  if (serverEnv.slackBotToken) {
+    startSlackEventWorker(db, serverEnv.slackBotToken);
+  }
   const server = serve({
     fetch: app.fetch,
     port: serverEnv.apiPort,

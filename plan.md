@@ -446,10 +446,10 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 
 - [x] Verify Slack signatures against the raw body before JSON parsing.
 - [x] Reject invalid URL-verification signatures.
-- [ ] Retain Slack `event_id`, `team_id`, retry metadata, and event timestamps.
-- [ ] Add the durable `event_inbox` schema and migrations.
-- [ ] Acknowledge verified Slack events within three seconds before processing.
-- [ ] Add background processing, retries, restart recovery, and failed-job inspection.
+- [x] Retain Slack `event_id`, `team_id`, retry metadata, and event timestamps.
+- [x] Add the durable `event_inbox` schema and migrations.
+- [x] Acknowledge verified Slack events within three seconds before processing.
+- [x] Add background processing, retries, restart recovery, and failed-job inspection.
 - [ ] Make repeated reaction removal an exact no-op without cross-message deletion.
 - [ ] Ignore self-stamps consistently in live ingestion and backfill.
 - [ ] Store `occurredAt`, `timestampSource`, and `ingestedAt` for historical events.

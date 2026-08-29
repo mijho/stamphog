@@ -111,6 +111,7 @@ bun run dev:api          # API only
 bun run db:migrate       # Apply versioned database migrations
 bun run seed             # Load fixture data
 bun run backfill         # Import Slack history
+bun run slack:inbox      # Inspect failed Slack inbox jobs (without payloads)
 bun test                 # Ingest contract tests
 bun run build            # Production build
 bun run preview          # Preview production build

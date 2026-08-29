@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { createDb } from "./db";
 
 const temporaryDirectories: string[] = [];
@@ -48,7 +49,9 @@ describe("SQLite migrations", () => {
       file.includes(".pre-drizzle-")
     );
     expect(actor?.display_name).toBe("Legacy User");
-    expect(migrationCount?.count).toBe(1);
+    expect(migrationCount?.count).toBe(
+      readMigrationFiles({ migrationsFolder: "./drizzle" }).length
+    );
     expect(backupFiles).toHaveLength(1);
   });
 });

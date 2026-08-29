@@ -1,6 +1,9 @@
 export interface SlackEventEnvelope {
   type?: string;
   challenge?: string;
+  event_id?: string;
+  team_id?: string;
+  event_time?: number;
   event?: SlackEvent;
 }
 
