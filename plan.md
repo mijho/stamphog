@@ -460,8 +460,8 @@ Do not begin exe.dev provisioning or multi-tenant schema work until Gate A passe
 - [x] Add the server-side read-auth and workspace-authorization boundary.
 - [x] Redact tokens, event bodies, and private message text from logs.
 - [x] Make backfill cursor-driven, rate-limit-aware, resumable, and auditable.
-- [ ] Add rule, webhook, signature, retry, query-window, and backfill tests.
-- [ ] Pass the complete local reliability and privacy test suite.
+- [x] Add rule, webhook, signature, retry, query-window, and backfill tests.
+- [x] Pass the complete local reliability and privacy test suite.
 
 ### Phase 2 — Protected exe.dev SQLite staging
 
